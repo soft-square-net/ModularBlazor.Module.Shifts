@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="soft.square.net.ModularBlazor.Module.Sdk" />
+
+  <!-- Shifts domain: sections (which categories a desk covers), shifts and their rota. References: WebApi.SharedKernel (the Module SDK). -->
+
+</Project>

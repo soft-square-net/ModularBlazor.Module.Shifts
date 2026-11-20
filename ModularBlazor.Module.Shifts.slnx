@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/WebApi.Modules.Shifts.Application/WebApi.Modules.Shifts.Application.csproj" />
+  <Project Path="src/WebApi.Modules.Shifts.Client/WebApi.Modules.Shifts.Client.csproj" />
+  <Project Path="src/WebApi.Modules.Shifts.Domain/WebApi.Modules.Shifts.Domain.csproj" />
+  <Project Path="src/WebApi.Modules.Shifts.Infrastructure/WebApi.Modules.Shifts.Infrastructure.csproj" />
+</Solution>
