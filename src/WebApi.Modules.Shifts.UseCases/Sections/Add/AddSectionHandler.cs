@@ -1,0 +1,13 @@
+using soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate;
+
+namespace soft.square.net.WebApi.Modules.Shifts.UseCases.Sections.Add;
+
+public sealed class AddSectionHandler(IRepository<Section> sections) : ICommandHandler<AddSectionCommand, Result<SectionDto>>
+{
+    public async ValueTask<Result<SectionDto>> Handle(AddSectionCommand command, CancellationToken ct)
+    {
+        var section = Section.Create(command.Name, command.Categories, command.AutoAssignDelayMinutes, command.CheckoutGraceMinutes);
+        await sections.AddAsync(section, ct);
+        return SectionDto.From(section);
+    }
+}

@@ -2,14 +2,15 @@
   <Sdk Name="soft.square.net.ModularBlazor.Module.Sdk" />
 
   <!--
-    Shifts module, entry assembly: IRuntimeModule, endpoints, the tenant DbContext and its migrations.
-    References: Application, plus WebApi.Data, EF Core and Carter from the host (the Module SDK).
-    NOT referenced by WebApi: zip this project's build output (bin/<Configuration>/net10.0, which holds all three
-    layers) and upload it to POST /api/admin/modules.
+    Infrastructure: the tenant DbContext (Data/ShiftsDbContext.cs), the entity mappings (Data/Config) and the
+    migrations, one set per engine (Data/Migrations/<Provider>). References Core only.
+    The Module SDK compiles it against WebApi.Data (EF Core, TenantDbContext, repositories), provided by the host, and
+    makes it loadable on its own (EnableDynamicLoading), which dotnet-ef needs to add migrations to this project.
+    It is not the entry assembly: WebApi.Modules.Shifts.Web is.
   -->
 
   <ItemGroup>
-    <ProjectReference Include="..\WebApi.Modules.Shifts.Application\WebApi.Modules.Shifts.Application.csproj" />
+    <ProjectReference Include="..\WebApi.Modules.Shifts.Core\WebApi.Modules.Shifts.Core.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Unit tests of Core (aggregate rules) and UseCases (handlers, with NSubstitute for the repositories and the
+       platform's IAccessScopes / IGrantStore). No database, no host. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WebApi.Modules.Shifts.Core\WebApi.Modules.Shifts.Core.csproj" />
+    <ProjectReference Include="..\..\src\WebApi.Modules.Shifts.UseCases\WebApi.Modules.Shifts.UseCases.csproj" />
+  </ItemGroup>
+
+</Project>

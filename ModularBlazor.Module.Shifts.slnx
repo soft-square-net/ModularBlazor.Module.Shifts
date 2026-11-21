@@ -1,6 +1,13 @@
 <Solution>
-  <Project Path="src/WebApi.Modules.Shifts.Application/WebApi.Modules.Shifts.Application.csproj" />
-  <Project Path="src/WebApi.Modules.Shifts.Client/WebApi.Modules.Shifts.Client.csproj" />
-  <Project Path="src/WebApi.Modules.Shifts.Domain/WebApi.Modules.Shifts.Domain.csproj" />
-  <Project Path="src/WebApi.Modules.Shifts.Infrastructure/WebApi.Modules.Shifts.Infrastructure.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/WebApi.Modules.Shifts.Core/WebApi.Modules.Shifts.Core.csproj" />
+    <Project Path="src/WebApi.Modules.Shifts.UseCases/WebApi.Modules.Shifts.UseCases.csproj" />
+    <Project Path="src/WebApi.Modules.Shifts.Infrastructure/WebApi.Modules.Shifts.Infrastructure.csproj" />
+    <Project Path="src/WebApi.Modules.Shifts.Web/WebApi.Modules.Shifts.Web.csproj" />
+    <Project Path="src/WebApi.Modules.Shifts.Client/WebApi.Modules.Shifts.Client.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WebApi.Modules.Shifts.UnitTests/WebApi.Modules.Shifts.UnitTests.csproj" />
+    <Project Path="tests/WebApi.Modules.Shifts.IntegrationTests/WebApi.Modules.Shifts.IntegrationTests.csproj" />
+  </Folder>
 </Solution>
