@@ -32,6 +32,7 @@ src/
     Sections/  Shifts/                   one endpoint class per route (REPR), and the request bodies
     Extensions/                          ResultExtensions (Result -> HTTP), ShiftsProblemsFilter
   WebApi.Modules.Shifts.Client/          the typed API client (NSwag), generated from src/openapi/shifts.json
+  Module.Shifts/                         the Blazor client module (pages over ShiftsClient); outside the layers
 tests/
   WebApi.Modules.Shifts.UnitTests/       Core rules; UseCases handlers with NSubstitute
   WebApi.Modules.Shifts.IntegrationTests/ the DbContext, mapping and specifications on SQLite

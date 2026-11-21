@@ -16,7 +16,8 @@ src/WebApi.Modules.Shifts.Core/             Core: aggregates (SectionAggregate, 
 src/WebApi.Modules.Shifts.UseCases/         use cases: one folder each, a Mediator command or query and its handler, returning an Ardalis Result
 src/WebApi.Modules.Shifts.Infrastructure/   data: ShiftsDbContext, entity configurations, tenant migrations per database provider
 src/WebApi.Modules.Shifts.Web/              entry assembly: IRuntimeModule, the Carter route table, one REPR endpoint class per route
-src/WebApi.Modules.Shifts.Client/           typed API client (NSwag)
+src/WebApi.Modules.Shifts.Client/           typed API client (NSwag), shipped as a hidden client module
+src/Module.Shifts/                          Shifts Management: the Blazor client module (MudTail), loaded by ModularBlazor.BlzWebClient
 src/openapi/   the saved OpenAPI document the client is generated from
 tests/         UnitTests (Core, UseCases; NSubstitute) and IntegrationTests (Infrastructure on SQLite)
 playground/    Aspire AppHost: the platform (from a Platform checkout) with this module, see "Developing"
@@ -62,7 +63,21 @@ the folder and namespace are passed):
   reference its package with `ExcludeAssets="runtime"` and declare a dependency with a version range in `module.json`.
 
 The server part is `WebApi.Modules.Shifts.Web`'s build output, zipped: every server layer plus the private Mediator
-and Ardalis.Result. Upload it on Host Modules (`/host-modules`). The module has no Blazor pages yet.
+and Ardalis.Result. Upload it on Host Modules (`/host-modules`). The client parts are two dlls, uploaded on Client
+Modules (`/client-modules`), the API client first:
+
+| Part | File | What it is |
+| --- | --- | --- |
+| API client | `soft.square.net.WebApi.Modules.Shifts.Client.dll` | the hidden client module `WebApi.Modules.Shifts.Client`: `ShiftsClient` |
+| UI | `soft.square.net.Module.Shifts.dll` | the client module `Module.Shifts`, "Shifts Management" (nav entry "Shifts"), with its `shifts.css` embedded |
+
+The UI's pages are built with MudTail (the `mud-*` classes and `MudTailDataTable`, from `ModularBlazor.Abstractions`):
+
+| Page | What it does |
+| --- | --- |
+| `/shifts` | the schedule (by section, from a day on), my shifts and the overdue ones; "New shift" plans one with its rota |
+| `/shifts/{id}` | one shift: rota, timings, publish, edit, check out the shift or one member, delete |
+| `/shifts/sections` | the sections: add, edit (name, categories, timing overrides), the timings in effect |
 
 ## Developing
 
@@ -80,8 +95,8 @@ module in it. It builds the platform from source, from a
 
 | Profile | What it does | Use it for |
 | --- | --- | --- |
-| `dev` (default) | The WebApi loads the module straight from `src/WebApi.Modules.Shifts.Web/bin/<Configuration>/net10.0` (`Modules:Local`, Development only): installed and active on start | Daily work: change code, rebuild, restart the `webapi` resource in the dashboard (or F5 again) |
-| `install` | The platform starts without the module, as in production; every build zips the module to `playground/out/shifts.zip` | Before a release: upload the zip on http://localhost:5070/host-modules (sign in as the dev platform admin, `admin@modular.local`) and activate it, which runs the real install path |
+| `dev` (default) | The WebApi loads the module straight from `src/WebApi.Modules.Shifts.Web/bin/<Configuration>/net10.0` (`Modules:Local`, Development only), and its client parts from their build output (`ClientModules:Local`): installed and active on start | Daily work: change code, rebuild, restart the `webapi` resource in the dashboard (or F5 again) |
+| `install` | The platform starts without the module, as in production; every build zips the module to `playground/out/shifts.zip` and copies the client parts to `playground/out/client` | Before a release: upload the zip on http://localhost:5070/host-modules (sign in as the dev platform admin, `admin@modular.local`) and activate it, then the two dlls on `/client-modules`, which runs the real install path |
 
 ```bash
 dotnet run --project playground --launch-profile dev
@@ -91,7 +106,8 @@ dotnet run --project playground --launch-profile dev
 dotnet run --project playground --launch-profile install
 ```
 
-Try the API in Scalar, http://localhost:5080/scalar, document `shifts`: sign in there with the organisation `acme` and
+Open http://localhost:5070/shifts and sign in with the organisation `acme` and one of its dev accounts below. Or try
+the API in Scalar, http://localhost:5080/scalar, document `shifts`: sign in there with the organisation `acme` and
 one of its dev accounts (the passwords are in the platform's `WebApi.Identity.Server/appsettings.Development.json`),
 and send the header `X-Tenant: acme`.
 

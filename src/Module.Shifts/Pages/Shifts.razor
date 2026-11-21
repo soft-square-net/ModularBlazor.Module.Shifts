@@ -1,0 +1,173 @@
+@page "/shifts"
+@inherits ShiftsPageBase
+
+@*
+  Shifts Management: the tenant's shifts in one of three views (the schedule, GET /api/shifts/shifts?sectionId&from;
+  my shifts, GET /api/shifts/shifts/mine; overdue, GET /api/shifts/shifts/overdue) and the "New shift" form
+  (POST /api/shifts/shifts). A row opens the shift. Sections are on their own page.
+*@
+
+<PageTitle>Shifts Management</PageTitle>
+
+<div class="mud-container sh-page">
+  <header class="sh-header">
+    <div>
+      <h1 class="mud-typography mud-typography-h4">Shifts Management</h1>
+      <p class="mud-typography mud-typography-body1 sh-muted">
+        Plan your organisation's shifts, put people on the rota and publish them: a published shift gives its members
+        their role's permissions on the section's categories while it runs. Members check out when they are done.
+      </p>
+    </div>
+    <div class="sh-actions">
+      <div class="mud-input-control sh-inline">
+        <label class="mud-input-label" for="sh-view">View</label>
+        <div class="mud-input-wrapper mud-input-wrapper--select mud-input-wrapper--dense">
+          <select id="sh-view" class="mud-input-slot" value="@_view" @onchange="ViewChangedAsync">
+            <option value="@View.Schedule">Schedule</option>
+            <option value="@View.Mine">My shifts</option>
+            <option value="@View.Overdue">Overdue</option>
+          </select>
+        </div>
+      </div>
+      @if (_view == View.Schedule)
+      {
+        <div class="mud-input-control sh-inline">
+          <label class="mud-input-label" for="sh-filter">Section</label>
+          <div class="mud-input-wrapper mud-input-wrapper--select mud-input-wrapper--dense">
+            <select id="sh-filter" class="mud-input-slot" value="@_sectionId" @onchange="SectionChangedAsync">
+              <option value="">All sections</option>
+              @foreach (var section in _sections.OrderBy(s => s.Name))
+              {
+                <option value="@section.Id">@section.Name</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="mud-input-control sh-inline">
+          <label class="mud-input-label" for="sh-from">From</label>
+          <div class="mud-input-wrapper mud-input-wrapper--dense">
+            <input id="sh-from" type="date" class="mud-input-slot" value="@_from.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" @onchange="FromChangedAsync" />
+          </div>
+        </div>
+      }
+      <a href="shifts/sections" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium">Sections</a>
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="LoadAsync" disabled="@Busy">Refresh</button>
+      <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="OpenCreate" disabled="@Busy">New shift</button>
+    </div>
+  </header>
+
+  <div class="sh-facts">
+    <span class="sh-chip">Shifts <strong>@_shifts.Count</strong></span>
+    @foreach (var group in _shifts.GroupBy(Status).OrderBy(g => Array.IndexOf(Statuses, g.Key)))
+    {
+      <span class="sh-chip @(group.Key == "Running" ? "sh-chip-on" : group.Key == "Overdue" ? "sh-chip-warn" : "")">@group.Key <strong>@group.Count()</strong></span>
+    }
+  </div>
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 sh-error" role="alert">@Error</p>
+  }
+
+  @if (_form is not null)
+  {
+    <ShiftEditor Form="_form" Sections="_sections" Busy="Busy" Me="@Me" OnSave="CreateAsync" OnCancel="() => _form = null" />
+  }
+
+  <section class="mud-paper mud-elevation-1 sh-card">
+    <MudTailDataTable @ref="_table" Columns="Columns" OnRowClick="OpenShift" EmptyText="@EmptyText" />
+  </section>
+</div>
+
+@code {
+  private enum View { Schedule, Mine, Overdue }
+
+  private static readonly IReadOnlyList<object> Columns =
+  [
+    new { key = "id", title = "#", type = "number", width = "80px" },
+    new { key = "section", title = "Section" },
+    new { key = "starts", title = "Starts" },
+    new { key = "ends", title = "Ends" },
+    new { key = "rota", title = "Rota", type = "number", width = "90px" },
+    new { key = "status", title = "Status", type = "enum", options = Statuses, width = "190px" },
+  ];
+
+  private MudTailDataTable? _table;
+  private View _view = View.Schedule;
+  private string _sectionId = "";
+  private DateTime _from = DateTime.Today;
+  private List<ShiftDto> _shifts = [];
+  private List<SectionDto> _sections = [];
+  private ShiftForm? _form;
+
+  // One text for every view: the table reads it once, when it is created.
+  private const string EmptyText = "No shifts in this view.";
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (firstRender) await LoadAsync();
+  }
+
+  private async Task LoadAsync()
+  {
+    await RunAsync(async () =>
+    {
+      var api = Api;
+      _sections = (await api.ListSectionsAsync()).ToList();
+      var shifts = _view switch
+      {
+        View.Mine => await api.ListMineAsync(),
+        View.Overdue => await api.ListOverdueAsync(),
+        _ => await api.ListShiftsAsync(int.TryParse(_sectionId, out var id) ? id : null,
+          new DateTimeOffset(DateTime.SpecifyKind(_from, DateTimeKind.Local))),
+      };
+      _shifts = shifts.OrderBy(s => s.StartsAt).ToList();
+      if (_table is not null) await _table.SetDataAsync(_shifts.Select(ToRow).ToList());
+    });
+  }
+
+  private static object ToRow(ShiftDto s) => new
+  {
+    id = s.Id.ToString(),
+    section = s.Section,
+    starts = When(s.StartsAt),
+    ends = When(s.EndsAt),
+    rota = s.Rota.Count,
+    status = Status(s),
+  };
+
+  private async Task ViewChangedAsync(ChangeEventArgs e)
+  {
+    if (Enum.TryParse<View>(e.Value?.ToString(), out var view)) _view = view;
+    await LoadAsync();
+  }
+
+  private async Task SectionChangedAsync(ChangeEventArgs e)
+  {
+    _sectionId = e.Value?.ToString() ?? "";
+    await LoadAsync();
+  }
+
+  private async Task FromChangedAsync(ChangeEventArgs e)
+  {
+    if (DateTime.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+      System.Globalization.DateTimeStyles.None, out var from)) _from = from;
+    await LoadAsync();
+  }
+
+  private void OpenCreate() => _form = ShiftForm.New(_sections, Me);
+
+  private void OpenShift(string id) => Nav.NavigateTo($"shifts/{Uri.EscapeDataString(id)}");
+
+  private async Task CreateAsync(ShiftForm form)
+  {
+    ShiftDto? created = null;
+    var ok = await RunAsync(async () =>
+    {
+      created = await Api.AddShiftAsync(form.ToRequest());
+      await MudTail.ToastAsync($"Shift #{created.Id} planned. Publish it from its page.", "success");
+      _form = null;
+    });
+    if (ok && created is not null) OpenShift(created.Id.ToString());
+  }
+}

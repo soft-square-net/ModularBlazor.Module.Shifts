@@ -1,0 +1,107 @@
+@*
+  The shift form shared by "New shift" and "Edit shift": section, start and end (local time) and the rota (user ids
+  with a role). The API checks the rules (end after start, a known section, at most one entry per user).
+*@
+
+<section class="mud-paper mud-elevation-2 sh-card">
+  <h2 class="mud-typography mud-typography-h6">@Title</h2>
+  @if (Sections.Count == 0)
+  {
+    <p class="mud-typography mud-typography-body2 sh-muted">
+      There are no sections yet. Add one on <a href="shifts/sections">Sections</a> first.
+    </p>
+  }
+  <form class="sh-form" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+    <div class="sh-grid">
+      <div class="mud-input-control">
+        <label class="mud-input-label" for="sh-section">Section</label>
+        <div class="mud-input-wrapper mud-input-wrapper--select">
+          <select id="sh-section" class="mud-input-slot" @bind="Form.SectionId" required disabled="@SectionLocked">
+            <option value="">Choose…</option>
+            @foreach (var section in Sections.OrderBy(s => s.Name))
+            {
+              <option value="@section.Id">@section.Name</option>
+            }
+          </select>
+        </div>
+        @if (SectionLocked)
+        {
+          <div class="mud-input-helper-text">A shift keeps its section. Delete it and plan a new one to move it.</div>
+        }
+      </div>
+      <div class="mud-input-control">
+        <label class="mud-input-label" for="sh-start">Starts</label>
+        <div class="mud-input-wrapper">
+          <input id="sh-start" type="datetime-local" class="mud-input-slot" value="@Form.StartsAt" @onchange="@(e => Form.StartsAt = e.Value?.ToString() ?? string.Empty)" required />
+        </div>
+      </div>
+      <div class="mud-input-control">
+        <label class="mud-input-label" for="sh-end">Ends</label>
+        <div class="mud-input-wrapper">
+          <input id="sh-end" type="datetime-local" class="mud-input-slot" value="@Form.EndsAt" @onchange="@(e => Form.EndsAt = e.Value?.ToString() ?? string.Empty)" required />
+        </div>
+      </div>
+    </div>
+
+    <h3 class="mud-typography mud-typography-subtitle1">Rota</h3>
+    <p class="mud-typography mud-typography-body2 sh-muted">
+      Who works the shift (user ids) and as what. Publishing grants each member the role's permissions on the section's
+      categories for the shift's time.
+    </p>
+    <div class="sh-rota">
+      @foreach (var (row, i) in Form.Rota.Select((r, i) => (r, i)).ToList())
+      {
+        <div class="sh-rota-row">
+          <div class="mud-input-control sh-grow">
+            <label class="mud-input-label" for="sh-rota-user-@i">User id</label>
+            <div class="mud-input-wrapper mud-input-wrapper--dense">
+              <input id="sh-rota-user-@i" class="mud-input-slot" @bind="row.UserId" required maxlength="200" />
+            </div>
+          </div>
+          <div class="mud-input-control sh-inline">
+            <label class="mud-input-label" for="sh-rota-role-@i">Role</label>
+            <div class="mud-input-wrapper mud-input-wrapper--select mud-input-wrapper--dense">
+              <select id="sh-rota-role-@i" class="mud-input-slot" @bind="row.Role">
+                @foreach (var role in Enum.GetValues<ShiftRole>())
+                {
+                  <option value="@role">@role</option>
+                }
+              </select>
+            </div>
+          </div>
+          <button type="button" class="mud-button-root mud-button-text mud-button-error mud-button-medium" @onclick="() => Form.Rota.Remove(row)">Remove</button>
+        </div>
+      }
+    </div>
+    <div class="sh-row-actions">
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-small" @onclick="AddRow">Add member</button>
+      @if (Me is not null && Form.Rota.All(r => r.UserId != Me))
+      {
+        <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-small" @onclick="AddMe">Add me</button>
+      }
+    </div>
+
+    <div class="sh-row-actions">
+      <button type="submit" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" disabled="@(Busy || Sections.Count == 0)">@SubmitText</button>
+      <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="OnCancel">Cancel</button>
+    </div>
+  </form>
+</section>
+
+@code {
+  [Parameter, EditorRequired] public ShiftForm Form { get; set; } = default!;
+  [Parameter, EditorRequired] public IReadOnlyList<SectionDto> Sections { get; set; } = [];
+  [Parameter] public string Title { get; set; } = "New shift";
+  [Parameter] public string SubmitText { get; set; } = "Plan shift";
+  [Parameter] public bool SectionLocked { get; set; }
+  [Parameter] public bool Busy { get; set; }
+  [Parameter] public string? Me { get; set; }
+  [Parameter] public EventCallback<ShiftForm> OnSave { get; set; }
+  [Parameter] public EventCallback OnCancel { get; set; }
+
+  private void AddRow() => Form.Rota.Add(new ShiftForm.RotaRow());
+
+  private void AddMe() => Form.Rota.Add(new ShiftForm.RotaRow { UserId = Me!, Role = ShiftRole.Desk });
+
+  private Task SubmitAsync() => OnSave.InvokeAsync(Form);
+}
