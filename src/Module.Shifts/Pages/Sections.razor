@@ -1,0 +1,188 @@
+@page "/shifts/sections"
+@inherits ShiftsPageBase
+
+@*
+  Sections: the desks a shift covers, each with the content categories its rota is granted on and optional overrides of
+  the automation timings (GET/POST /api/shifts/sections, PUT /api/shifts/sections/{id}, GET .../{id}/settings).
+*@
+
+<PageTitle>Shift sections</PageTitle>
+
+<div class="mud-container sh-page">
+  <a href="shifts" class="mud-button-root mud-button-text mud-button-primary mud-button-small sh-back">← All shifts</a>
+
+  <header class="sh-header">
+    <div>
+      <h1 class="mud-typography mud-typography-h4">Sections</h1>
+      <p class="mud-typography mud-typography-body1 sh-muted">
+        A section is a desk with the categories it covers. A shift's rota is granted on its section's categories.
+        Leave the timings empty to use the organisation's defaults.
+      </p>
+    </div>
+    <div class="sh-actions">
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="LoadAsync" disabled="@Busy">Refresh</button>
+      <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="() => OpenForm(null)" disabled="@Busy">New section</button>
+    </div>
+  </header>
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 sh-error" role="alert">@Error</p>
+  }
+
+  @if (_form is not null)
+  {
+    <section class="mud-paper mud-elevation-2 sh-card">
+      <h2 class="mud-typography mud-typography-h6">@(_form.Id is null ? "New section" : $"Edit section #{_form.Id}")</h2>
+      <form class="sh-form" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+        <div class="sh-grid">
+          <div class="mud-input-control">
+            <label class="mud-input-label" for="sh-name">Name</label>
+            <div class="mud-input-wrapper">
+              <input id="sh-name" class="mud-input-slot" @bind="_form.Name" required maxlength="200" />
+            </div>
+          </div>
+          <div class="mud-input-control">
+            <label class="mud-input-label" for="sh-delay">Auto-assign after (minutes)</label>
+            <div class="mud-input-wrapper">
+              <input id="sh-delay" type="number" min="0" class="mud-input-slot" @bind="_form.AutoAssignDelayMinutes" />
+            </div>
+          </div>
+          <div class="mud-input-control">
+            <label class="mud-input-label" for="sh-grace">Check-out grace (minutes)</label>
+            <div class="mud-input-wrapper">
+              <input id="sh-grace" type="number" min="0" class="mud-input-slot" @bind="_form.CheckoutGraceMinutes" />
+            </div>
+          </div>
+          <div class="mud-input-control sh-wide">
+            <label class="mud-input-label" for="sh-categories">Categories</label>
+            <div class="mud-input-wrapper">
+              <input id="sh-categories" class="mud-input-slot" @bind="_form.Categories" placeholder="politics, economy" />
+            </div>
+            <div class="mud-input-helper-text">Content category ids, separated by commas. Changing them re-grants the rota of shifts that have not ended.</div>
+          </div>
+        </div>
+        <div class="sh-row-actions">
+          <button type="submit" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" disabled="@Busy">@(_form.Id is null ? "Add section" : "Save")</button>
+          <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _form = null">Cancel</button>
+        </div>
+      </form>
+    </section>
+  }
+
+  <section class="mud-paper mud-elevation-1 sh-card">
+    <MudTailDataTable @ref="_table" Columns="Columns" Actions="Actions" OnAction="OnActionAsync" EmptyText="No sections yet." />
+  </section>
+
+  @if (_settings is not null)
+  {
+    <section class="mud-paper mud-elevation-1 sh-card">
+      <h2 class="mud-typography mud-typography-h6">Timings of @SectionName(_settings.SectionId)</h2>
+      <dl class="sh-dl mud-typography-body2">
+        <dt>Auto-assign after</dt><dd>@_settings.AutoAssignDelay</dd>
+        <dt>Check-out grace</dt><dd>@_settings.CheckoutGrace</dd>
+      </dl>
+      <p class="mud-typography mud-typography-body2 sh-muted">The section's overrides, else the organisation's defaults.</p>
+    </section>
+  }
+</div>
+
+@code {
+  private sealed class SectionForm
+  {
+    public int? Id { get; init; }
+    public string Name { get; set; } = "";
+    public string Categories { get; set; } = "";
+    public int? AutoAssignDelayMinutes { get; set; }
+    public int? CheckoutGraceMinutes { get; set; }
+  }
+
+  private static readonly IReadOnlyList<object> Columns =
+  [
+    new { key = "id", title = "#", type = "number", width = "80px" },
+    new { key = "name", title = "Name" },
+    new { key = "categories", title = "Categories" },
+    new { key = "delay", title = "Auto-assign (min)", width = "160px" },
+    new { key = "grace", title = "Grace (min)", width = "130px" },
+  ];
+
+  private static readonly IReadOnlyList<object> Actions =
+  [
+    new { id = "edit", label = "Edit", icon = "edit", color = "primary" },
+    new { id = "settings", label = "Timings", icon = "sliders", color = "default" },
+  ];
+
+  private MudTailDataTable? _table;
+  private List<SectionDto> _sections = [];
+  private SectionForm? _form;
+  private SectionSettings? _settings;
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (firstRender) await LoadAsync();
+  }
+
+  private async Task LoadAsync()
+  {
+    await RunAsync(async () =>
+    {
+      _sections = (await Api.ListSectionsAsync()).OrderBy(s => s.Name).ToList();
+      if (_table is not null) await _table.SetDataAsync(_sections.Select(ToRow).ToList());
+    });
+  }
+
+  private static object ToRow(SectionDto s) => new
+  {
+    id = s.Id.ToString(),
+    name = s.Name,
+    categories = string.Join(", ", s.Categories),
+    delay = s.AutoAssignDelayMinutes?.ToString() ?? "default",
+    grace = s.CheckoutGraceMinutes?.ToString() ?? "default",
+  };
+
+  private string SectionName(int id) => _sections.FirstOrDefault(s => s.Id == id)?.Name ?? $"#{id}";
+
+  private void OpenForm(SectionDto? section)
+  {
+    _settings = null;
+    _form = section is null
+      ? new SectionForm()
+      : new SectionForm
+      {
+        Id = section.Id,
+        Name = section.Name,
+        Categories = string.Join(", ", section.Categories),
+        AutoAssignDelayMinutes = section.AutoAssignDelayMinutes,
+        CheckoutGraceMinutes = section.CheckoutGraceMinutes,
+      };
+  }
+
+  private async Task OnActionAsync((string Action, string Key) e)
+  {
+    var section = _sections.FirstOrDefault(s => s.Id.ToString() == e.Key);
+    if (section is null) return;
+    if (e.Action == "edit") OpenForm(section);
+    else if (e.Action == "settings")
+      await RunAsync(async () => _settings = await Api.GetSectionSettingsAsync(section.Id));
+  }
+
+  private async Task SaveAsync()
+  {
+    if (_form is null) return;
+    var form = _form;
+    var request = new SectionRequest
+    {
+      Name = form.Name.Trim(),
+      Categories = form.Categories.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Distinct().ToList(),
+      AutoAssignDelayMinutes = form.AutoAssignDelayMinutes,
+      CheckoutGraceMinutes = form.CheckoutGraceMinutes,
+    };
+    await RunAsync(async () =>
+    {
+      var saved = form.Id is { } id ? await Api.UpdateSectionAsync(id, request) : await Api.AddSectionAsync(request);
+      await MudTail.ToastAsync($"Section {saved.Name} saved.", "success");
+      _form = null;
+    }, LoadAsync);
+  }
+}

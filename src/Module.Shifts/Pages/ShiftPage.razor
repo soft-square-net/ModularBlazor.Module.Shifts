@@ -1,0 +1,195 @@
+@page "/shifts/{Id:int}"
+@inherits ShiftsPageBase
+
+@*
+  One shift: its facts and rota (GET /api/shifts/shifts/{id}), what automation applies to it (GET .../automation), and
+  the actions: publish (writes the rota's grants), check out the whole shift or one member, edit (PUT) and delete.
+*@
+
+<PageTitle>Shift #@Id</PageTitle>
+
+<div class="mud-container sh-page">
+  <a href="shifts" class="mud-button-root mud-button-text mud-button-primary mud-button-small sh-back">← All shifts</a>
+
+  @if (_shift is null)
+  {
+    @if (Error is not null)
+    {
+      <p class="mud-typography mud-typography-body2 sh-error" role="alert">@Error</p>
+    }
+    else
+    {
+      <p class="mud-typography mud-typography-body1 sh-muted">Loading…</p>
+    }
+  }
+  else
+  {
+    <header class="sh-header">
+      <div>
+        <h1 class="mud-typography mud-typography-h4">Shift #@_shift.Id · @_shift.Section</h1>
+        <p class="mud-typography mud-typography-body1 sh-muted">@When(_shift.StartsAt) → @When(_shift.EndsAt)</p>
+      </div>
+      <div class="sh-actions">
+        <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="LoadAsync" disabled="@Busy">Refresh</button>
+        @if (_shift.CheckedOutAt is null)
+        {
+          @if (!_shift.Published)
+          {
+            <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="PublishAsync" disabled="@Busy">Publish</button>
+          }
+          <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="OpenEdit" disabled="@Busy">Edit</button>
+          @if (CanCheckOut)
+          {
+            <button type="button" class="mud-button-root mud-button-filled mud-button-secondary mud-button-medium" @onclick="CheckOutAsync" disabled="@Busy">Check out shift</button>
+          }
+        }
+        @if (_confirmDelete)
+        {
+          <button type="button" class="mud-button-root mud-button-filled mud-button-error mud-button-medium" @onclick="DeleteAsync" disabled="@Busy">Delete for good</button>
+          <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _confirmDelete = false">Keep it</button>
+        }
+        else
+        {
+          <button type="button" class="mud-button-root mud-button-outlined mud-button-error mud-button-medium" @onclick="() => _confirmDelete = true" disabled="@Busy">Delete</button>
+        }
+      </div>
+    </header>
+
+    <div class="sh-facts">
+      <span class="sh-chip @(Status(_shift) == "Running" ? "sh-chip-on" : Status(_shift) == "Overdue" ? "sh-chip-warn" : "")">@Status(_shift)</span>
+      @foreach (var category in _shift.Categories)
+      {
+        <span class="sh-chip">@category</span>
+      }
+    </div>
+
+    @if (Error is not null)
+    {
+      <p class="mud-typography mud-typography-body2 sh-error" role="alert">@Error</p>
+    }
+
+    @if (_form is not null)
+    {
+      <ShiftEditor Form="_form" Sections="_sections" Title="Edit shift" SubmitText="Save" SectionLocked="true"
+                   Busy="Busy" Me="@Me" OnSave="SaveAsync" OnCancel="() => _form = null" />
+    }
+
+    <div class="sh-columns">
+      <section class="mud-paper mud-elevation-1 sh-card">
+        <h2 class="mud-typography mud-typography-h6">Rota</h2>
+        @if (_shift.Rota.Count == 0)
+        {
+          <p class="mud-typography mud-typography-body2 sh-muted">Nobody is on this shift yet. Edit it to add members.</p>
+        }
+        else
+        {
+          <table class="sh-table mud-typography-body2">
+            <thead><tr><th>Member</th><th>Role</th><th>Access ends</th><th>Checked out</th><th></th></tr></thead>
+            <tbody>
+              @foreach (var member in _shift.Rota)
+              {
+                <tr>
+                  <td>@Who(member.UserId)</td>
+                  <td>@member.Role</td>
+                  <td>@(_shift.Published ? When(member.AccessEnds) : "not published")</td>
+                  <td>@When(member.CheckedOutAt)</td>
+                  <td>
+                    @if (CanCheckOut && member.CheckedOutAt is null)
+                    {
+                      <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small"
+                              @onclick="() => CheckOutMemberAsync(member.UserId)" disabled="@Busy">Check out</button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+
+      <section class="mud-paper mud-elevation-1 sh-card">
+        <h2 class="mud-typography mud-typography-h6">Details</h2>
+        <dl class="sh-dl mud-typography-body2">
+          <dt>Section</dt><dd>@_shift.Section</dd>
+          <dt>Published</dt><dd>@(_shift.Published ? "yes" : "no")</dd>
+          <dt>Running</dt><dd>@(_shift.Running ? "yes" : "no")</dd>
+          <dt>Checked out</dt><dd>@(_shift.CheckedOutAt is null ? "no" : $"{When(_shift.CheckedOutAt)} by {Who(_shift.CheckedOutBy)}")</dd>
+          <dt>Grant source</dt><dd><code>@_shift.GrantSource</code></dd>
+          @if (_automation is not null)
+          {
+            <dt>Auto-assign after</dt><dd>@_automation.AutoAssignDelay</dd>
+            <dt>Check-out grace</dt><dd>@_automation.CheckoutGrace</dd>
+          }
+        </dl>
+      </section>
+    </div>
+  }
+</div>
+
+@code {
+  [Parameter] public int Id { get; set; }
+
+  private ShiftDto? _shift;
+  private ShiftAutomationInfo? _automation;
+  private List<SectionDto> _sections = [];
+  private ShiftForm? _form;
+  private bool _confirmDelete;
+
+  /// <summary>Check-out is for a published shift that has started (running or overdue) and is not checked out.</summary>
+  private bool CanCheckOut => _shift is { Published: true, CheckedOutAt: null } && _shift.StartsAt <= DateTimeOffset.UtcNow;
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (firstRender) await LoadAsync();
+  }
+
+  private async Task LoadAsync()
+  {
+    await RunAsync(async () =>
+    {
+      var api = Api;
+      _shift = await api.GetShiftAsync(Id);
+      _automation = await api.GetShiftAutomationAsync(Id);
+    }, toast: false);
+  }
+
+  private async Task OpenEdit()
+  {
+    if (_shift is null) return;
+    if (_sections.Count == 0) await RunAsync(async () => _sections = (await Api.ListSectionsAsync()).ToList());
+    _form = ShiftForm.From(_shift);
+  }
+
+  private Task PublishAsync() => ChangeAsync(api => api.PublishShiftAsync(Id), "Published: the rota's grants are written.");
+
+  private Task CheckOutAsync() => ChangeAsync(api => api.CheckOutShiftAsync(Id), "Shift checked out: its grants end now.");
+
+  private Task CheckOutMemberAsync(string userId) =>
+    ChangeAsync(api => api.CheckOutMemberAsync(Id, userId), $"{Who(userId)} checked out.");
+
+  private async Task SaveAsync(ShiftForm form)
+  {
+    await ChangeAsync(api => api.UpdateShiftAsync(Id, form.ToRequest()), "Shift saved.");
+    if (Error is null) _form = null;
+  }
+
+  private async Task ChangeAsync(Func<ShiftsClient, Task<ShiftDto>> call, string done)
+  {
+    await RunAsync(async () =>
+    {
+      _shift = await call(Api);
+      await MudTail.ToastAsync(done, "success");
+    });
+  }
+
+  private async Task DeleteAsync()
+  {
+    var ok = await RunAsync(async () =>
+    {
+      await Api.DeleteShiftAsync(Id);
+      await MudTail.ToastAsync($"Shift #{Id} deleted.", "success");
+    });
+    _confirmDelete = false;
+    if (ok) Nav.NavigateTo("shifts");
+  }
+}

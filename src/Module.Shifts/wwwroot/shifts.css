@@ -1,0 +1,37 @@
+/* Module.Shifts (Shifts Management): layout around MudTail's components. Colours come from the --mud-palette-*
+   tokens of Layouts.Default. */
+.sh-page { padding-block: 8px 32px; }
+.sh-header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; }
+.sh-header h1 { margin: 0 0 4px; }
+.sh-header p { max-width: 72ch; margin: 0; }
+.sh-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.sh-inline { margin: 0; min-width: 160px; }
+.sh-grow { flex: 1 1 220px; }
+.sh-muted { color: var(--mud-palette-text-secondary); }
+.sh-error { color: var(--mud-palette-error); }
+.sh-back { margin-bottom: 8px; }
+.sh-card { padding: 20px; margin-bottom: 16px; border-radius: var(--mud-default-borderradius, 8px); }
+.sh-card h2 { margin: 0 0 12px; }
+.sh-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.sh-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: .8125rem;
+  border: 1px solid var(--mud-palette-lines-default); color: var(--mud-palette-text-primary); background: var(--mud-palette-surface);
+}
+.sh-chip-on { border-color: var(--mud-palette-success); }
+.sh-chip-warn { border-color: var(--mud-palette-warning); }
+.sh-form { display: grid; gap: 4px; }
+.sh-grid { display: grid; gap: 0 16px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.sh-wide { grid-column: 1 / -1; }
+.sh-row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.sh-rota { display: grid; gap: 8px; margin: 4px 0 8px; }
+.sh-rota-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.sh-rota-row .mud-input-control { margin: 0; }
+.sh-table { width: 100%; border-collapse: collapse; }
+.sh-table th, .sh-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--mud-palette-lines-default); }
+.sh-table th { font-weight: 500; color: var(--mud-palette-text-secondary); }
+.sh-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+.sh-dl dt { color: var(--mud-palette-text-secondary); }
+.sh-dl dd { margin: 0; }
+.sh-columns { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.sh-list { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.sh-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
