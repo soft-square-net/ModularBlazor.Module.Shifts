@@ -1,5 +1,5 @@
 /* Module.Shifts (Shifts Management): layout around MudTail's components. Colours come from the --mud-palette-*
-   tokens of Layouts.Default. */
+   tokens of UI.MudTail. */
 .sh-page { padding-block: 8px 32px; }
 .sh-header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; }
 .sh-header h1 { margin: 0 0 4px; }
