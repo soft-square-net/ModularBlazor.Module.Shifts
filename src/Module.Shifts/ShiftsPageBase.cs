@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
+using Microsoft.Extensions.Localization;
 using soft.square.net.ModularBlazor.Abstractions;
 using soft.square.net.ModularBlazor.Abstractions.MudTail;
 using soft.square.net.WebApi.Modules.Shifts.Client;
@@ -17,6 +18,12 @@ public abstract class ShiftsPageBase : ComponentBase
     [Inject] protected IHttpClientFactory HttpClients { get; set; } = default!;
     [Inject] protected MudTailRuntime MudTail { get; set; } = default!;
     [Inject] protected NavigationManager Nav { get; set; } = default!;
+    [Inject] protected IStringLocalizerFactory Texts { get; set; } = default!;
+
+    private IStringLocalizer? _l;
+
+    /// <summary>This module's texts (its embedded i18n/{culture}.json); the keys are the English texts.</summary>
+    protected IStringLocalizer L => _l ??= Texts.Create(GetType());
     [Inject] protected AuthenticationStateProvider Auth { get; set; } = default!;
 
     /// <summary>Shifts routes (/api/shifts/...) reach the pool that runs the module through the gateway.</summary>
@@ -66,17 +73,17 @@ public abstract class ShiftsPageBase : ComponentBase
         return true;
     }
 
-    protected static string Describe(Exception ex) => ex switch
+    protected string Describe(Exception ex) => ex switch
     {
         ShiftsApiException { StatusCode: 400 } api when Mentions(api, "tenant") =>
-            "400: no tenant. Shifts belong to a tenant: sign in to one (your organisation) to manage its shifts.",
-        ShiftsApiException { StatusCode: 401 } => "401: the gateway did not accept the access token. Sign in again.",
+            L["400: no tenant. Shifts belong to a tenant: sign in to one (your organisation) to manage its shifts."],
+        ShiftsApiException { StatusCode: 401 } => L["401: the gateway did not accept the access token. Sign in again."],
         ShiftsApiException { StatusCode: 403 } api =>
-            $"403: {ProblemDetail(api) ?? "your account lacks the shifts permission for this (shifts.view or shifts.manage in this tenant)."}",
-        ShiftsApiException { StatusCode: 404 } api => $"404: {ProblemDetail(api) ?? "not found, or not visible to you."}",
-        ShiftsApiException { StatusCode: 409 } api => $"409: {ProblemDetail(api) ?? "the shift does not allow this now. Reload and try again."}",
+            $"403: {ProblemDetail(api) ?? L["your account lacks the shifts permission for this (shifts.view or shifts.manage in this tenant)."]}",
+        ShiftsApiException { StatusCode: 404 } api => $"404: {ProblemDetail(api) ?? L["not found, or not visible to you."]}",
+        ShiftsApiException { StatusCode: 409 } api => $"409: {ProblemDetail(api) ?? L["the shift does not allow this now. Reload and try again."]}",
         ShiftsApiException api => $"{api.StatusCode}: {ProblemDetail(api) ?? FirstLine(api.Response) ?? FirstLine(api.Message)}",
-        HttpRequestException http => $"The gateway is not reachable ({http.Message}).",
+        HttpRequestException http => L["The gateway is not reachable ({0}).", http.Message],
         _ => ex.Message,
     };
 
@@ -103,7 +110,7 @@ public abstract class ShiftsPageBase : ComponentBase
 
     protected static string When(DateTimeOffset? at) => at?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "";
 
-    /// <summary>Where a shift stands, in words.</summary>
+    /// <summary>Where a shift stands, in English words: a key of the texts (show it with L[Status(shift)]).</summary>
     protected static string Status(ShiftDto shift) => shift switch
     {
         { CheckedOutAt: not null } => "Checked out",
@@ -119,7 +126,7 @@ public abstract class ShiftsPageBase : ComponentBase
         ["Planned", "Published", "Running", "Running, not published", "Overdue", "Ended, not published", "Checked out"];
 
     /// <summary>A short label for a user id: the signed-in user is "you".</summary>
-    protected string Who(string? userId) => userId is null ? "" : userId == Me ? $"you ({Short(userId)})" : userId;
+    protected string Who(string? userId) => userId is null ? "" : userId == Me ? L["you ({0})", Short(userId)] : userId;
 
     private static string Short(string id) => id.Length > 8 ? id[..8] + "…" : id;
 }
