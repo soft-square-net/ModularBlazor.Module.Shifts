@@ -62,12 +62,46 @@
         }
       }
     },
+    "/api/shifts/sections/serving": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "The sections that serve a category: the category's own sections first, then every department (they serve all categories).",
+        "operationId": "Shifts_ListServingSections",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SectionDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/shifts/sections/{id}": {
       "put": {
         "tags": [
           "Shifts"
         ],
-        "summary": "Changing the categories rewrites the grants of the section's published shifts that have not ended.",
+        "summary": "Changing the categories or the kind rewrites the grants of the section's published shifts that have not ended.",
         "operationId": "Shifts_UpdateSection",
         "parameters": [
           {
@@ -549,6 +583,7 @@
         "required": [
           "id",
           "name",
+          "kind",
           "categories",
           "autoAssignDelayMinutes",
           "checkoutGraceMinutes"
@@ -561,6 +596,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SectionKind"
           },
           "categories": {
             "type": "array",
@@ -583,6 +621,13 @@
             "format": "int32"
           }
         }
+      },
+      "SectionKind": {
+        "enum": [
+          "Category",
+          "Department"
+        ],
+        "type": "string"
       },
       "SectionRequest": {
         "required": [
@@ -615,6 +660,16 @@
               "integer"
             ],
             "format": "int32"
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SectionKind"
+              }
+            ]
           }
         }
       },

@@ -9,8 +9,8 @@ ModularBlazor runtime module is: an assembly set that the host loads into a coll
 ```
 src/
   WebApi.Modules.Shifts.Core/            Core       (ModuleLayer Domain)
-    SectionAggregate/Section.cs          a desk and the categories it covers; optional timer overrides
-    SectionAggregate/Specifications/     SectionByIdSpec, SectionsWithCategoriesSpec
+    SectionAggregate/Section.cs          a desk and the categories it covers, or a department (SectionKind) that serves them all; optional timer overrides
+    SectionAggregate/Specifications/     SectionByIdSpec, SectionsWithCategoriesSpec, SectionsServingCategorySpec
     ShiftAggregate/Shift.cs              a shift on the clock and its rota; rules throw DomainException
     ShiftAggregate/Specifications/       ShiftByIdSpec, ShiftsInWindowSpec, MemberShiftsSpec, OverdueShiftsSpec
   WebApi.Modules.Shifts.UseCases/        UseCases   (ModuleLayer Application)
@@ -71,12 +71,13 @@ This is what the module is for, so it is worth knowing where each part lives:
   `CheckOutMember`, and `EndOf(member)`, the moment a member's access ends.
 - **UseCases** turns that into grants. `RoleTemplates` lists the content permissions of each role (plain strings: the
   shifts module never references the content module). `ShiftGrants.WriteAsync` writes every member's permissions on
-  every category of the section, valid from the start to `EndOf(member)`, with one
+  every scope of the section (`Section.Scopes`: `category:{id}` per category, or `section:{id}` for a department),
+  valid from the start to `EndOf(member)`, with one
   `IGrantStore.ReplaceSourceAsync("shift:{id}", ...)`. Nothing is written until the shift is published.
 - **ShiftChanges** is the shape of every change to a shift: load it, check who may do it, call the aggregate, save, and
   rewrite its grants. Publish, Update, CheckOut and CheckOutMember all go through it, so a published shift's grants
-  never lag behind its rota. Changing a section's categories (`UpdateSectionHandler`) rewrites the grants of its
-  shifts that have not ended.
+  never lag behind its rota. Changing a section's categories or kind (`UpdateSectionHandler`) rewrites the grants of
+  its shifts that have not ended.
 - The host evaluates each grant's window on every request, so rights start and stop on the clock without a job.
 
 ### Rules that come from the platform

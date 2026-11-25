@@ -14,7 +14,7 @@ public sealed class UpdateSectionHandler(IRepository<Section> sections, IReadRep
         var section = await sections.FirstOrDefaultAsync(new SectionByIdSpec(command.Id), ct);
         if (section is null) return SectionDto.NotFound<SectionDto>(command.Id);
 
-        section.Update(command.Name, command.Categories, command.AutoAssignDelayMinutes, command.CheckoutGraceMinutes);
+        section.Update(command.Name, command.Categories, command.AutoAssignDelayMinutes, command.CheckoutGraceMinutes, command.Kind ?? section.Kind);
         await sections.UpdateAsync(section, ct);
         foreach (var shift in await shifts.ListAsync(new ShiftsInWindowSpec(from: caller.Now, sectionId: section.Id), ct))
             await grants.WriteAsync(shift, section, ct);

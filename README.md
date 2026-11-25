@@ -77,7 +77,35 @@ The UI's pages are built with MudTail (the `mud-*` classes and `MudTailDataTable
 | --- | --- |
 | `/shifts` | the schedule (by section, from a day on), my shifts and the overdue ones; "New shift" plans one with its rota |
 | `/shifts/{id}` | one shift: rota, timings, publish, edit, check out the shift or one member, delete |
-| `/shifts/sections` | the sections: add, edit (name, categories, timing overrides), the timings in effect |
+| `/shifts/sections` | the sections: add, edit (name, kind, categories, timing overrides), the timings in effect |
+
+## Category sections and departments
+
+A section has a kind (`SectionKind`, sent and stored by name):
+
+| Kind | Serves | Categories | Its rota is granted on |
+| --- | --- | --- | --- |
+| `Category` (the default) | only its own categories (Sport, Politics) | at least one | `category:{id}` for each of them |
+| `Department` | every category (Multimedia, SEO) | none: a department sent categories is refused (409, as every rule of the module) | `section:{id}`, the department itself |
+
+- `POST /api/shifts/sections` and `PUT /api/shifts/sections/{id}` take `kind`. Left out, an add makes a category section
+  and an update keeps the section's kind. Changing the kind, like changing the categories, rewrites the grants of the
+  section's published shifts that have not ended. Turning a category section into a department means sending no
+  categories in the same call.
+- Plans, rotas, publishing, check-out and the workflow timers work the same for both kinds.
+- **Which sections serve category X**: `GET /api/shifts/sections/serving?category=X` (`ShiftsClient.ListServingSectionsAsync`,
+  `shifts.view` or `shifts.manage`): the category's own sections first, then every department, each group by name. The
+  Content Designer's routing (Elsa) uses it: text goes to the category's section, images to Multimedia, SEO values to
+  SEO.
+- Lookups (`ShiftsLookups`, served by the host under `/api/shifts/lookups/{name}`, for pickers and other modules'
+  server-side checks through `ILookupClient`; any signed-in user of the tenant):
+  - `shifts.sections`: every section; key the id, text the name, column and filter `Kind`;
+  - `shifts.departments`: only the departments.
+
+  A lookup filters on one entity's own columns and departments have no category rows, so "which sections serve X"
+  is the endpoint above, not a lookup.
+- Content checks a content's rights against `press:` and `category:` scopes today. For a department's rota to act on
+  the contents routed to it, Content adds `section:{SectionId}` to a content's scopes (its phase 2 part).
 
 ## Developing
 
@@ -117,7 +145,7 @@ and send the header `X-Tenant: acme`.
 | `editor@modular.local` | `shifts.view`: sees sections and shifts; checks themselves out of a shift they are on |
 
 A published shift writes `content.*` grants (accept, assign, review, publish, ...) for its rota on the section's
-categories, valid only while it runs; they matter once the Content module is installed next to this one.
+categories (on the section itself for a department), valid only while it runs; they matter once the Content module is installed next to this one.
 
 In Development the platform seeds the dev tenants `acme` and `globex` on the playground's server. The playground gives
 the module's permissions to the dev accounts above through the WebApi's `Access:DevGrants` (Development only, by
