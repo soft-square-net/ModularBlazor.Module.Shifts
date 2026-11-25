@@ -44,7 +44,15 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Changing the categories rewrites the grants of the section's published shifts that have not ended.
+        /// The sections that serve a category: the category's own sections first, then every department (they serve all categories).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<SectionDto>> ListServingSectionsAsync(string category, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Changing the categories or the kind rewrites the grants of the section's published shifts that have not ended.
         /// </summary>
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
@@ -319,7 +327,87 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Changing the categories rewrites the grants of the section's published shifts that have not ended.
+        /// The sections that serve a category: the category's own sections first, then every department (they serve all categories).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<SectionDto>> ListServingSectionsAsync(string category, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (category == null)
+                throw new System.ArgumentNullException("category");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/shifts/sections/serving"
+                    urlBuilder_.Append("api/shifts/sections/serving");
+                    urlBuilder_.Append('?');
+                    urlBuilder_.Append(System.Uri.EscapeDataString("category")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(category, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+                    urlBuilder_.Length--;
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<System.Collections.Generic.IReadOnlyList<SectionDto>>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ShiftsApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new ShiftsApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Changing the categories or the kind rewrites the grants of the section's published shifts that have not ended.
         /// </summary>
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
@@ -1540,6 +1628,11 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
         public string Name { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("kind")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<SectionKind>))]
+        public SectionKind Kind { get; set; } = default!;
+
         [System.Text.Json.Serialization.JsonPropertyName("categories")]
         [System.ComponentModel.DataAnnotations.Required]
         public System.Collections.Generic.IReadOnlyList<string> Categories { get; set; } = new System.Collections.Generic.List<string>();
@@ -1562,6 +1655,18 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public enum SectionKind
+    {
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Category")]
+        Category = 0,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Department")]
+        Department = 1,
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class SectionRequest
     {
 
@@ -1578,6 +1683,10 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         [System.Text.Json.Serialization.JsonPropertyName("checkoutGraceMinutes")]
         public int? CheckoutGraceMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("kind")]
+        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<SectionKind>))]
+        public SectionKind? Kind { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 

@@ -11,4 +11,6 @@ public static class DataSchemaConstants
     public const int UserIdLength = 128;
     /// <summary>Rota roles, stored by name.</summary>
     public const int RoleLength = 16;
+    /// <summary>Section kinds, stored by name.</summary>
+    public const int KindLength = 16;
 }

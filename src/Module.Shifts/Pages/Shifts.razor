@@ -36,7 +36,7 @@
               <option value="">@L["All sections"]</option>
               @foreach (var section in _sections.OrderBy(s => s.Name))
               {
-                <option value="@section.Id">@section.Name</option>
+                <option value="@section.Id">@(section.Kind == SectionKind.Department ? L["{0} (department)", section.Name] : section.Name)</option>
               }
             </select>
           </div>

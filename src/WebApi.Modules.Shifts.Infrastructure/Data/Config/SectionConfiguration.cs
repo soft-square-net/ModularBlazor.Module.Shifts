@@ -10,6 +10,9 @@ public sealed class SectionConfiguration : IEntityTypeConfiguration<Section>
     {
         section.ToTable("sections");
         section.Property(s => s.Name).HasMaxLength(DataSchemaConstants.NameLength);
+        section.Property(s => s.Kind).HasConversion<string>().HasMaxLength(DataSchemaConstants.KindLength);
+        section.HasIndex(s => s.Kind); // the departments, for "which sections serve category X"
+        section.Ignore(s => s.IsDepartment);
         section.Ignore(s => s.Scopes);
         section.HasMany(s => s.Categories).WithOne().HasForeignKey("SectionId").OnDelete(DeleteBehavior.Cascade);
         section.Navigation(s => s.Categories).UsePropertyAccessMode(PropertyAccessMode.Field);

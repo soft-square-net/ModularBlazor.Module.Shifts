@@ -10,5 +10,6 @@ public sealed class SectionCategoryConfiguration : IEntityTypeConfiguration<Sect
     {
         category.ToTable("section_categories");
         category.Property(c => c.CategoryId).HasMaxLength(DataSchemaConstants.SlugLength);
+        category.HasIndex(c => c.CategoryId); // "which sections serve category X"
     }
 }

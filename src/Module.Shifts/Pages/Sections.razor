@@ -4,6 +4,7 @@
 @*
   Sections: the desks a shift covers, each with the content categories its rota is granted on and optional overrides of
   the automation timings (GET/POST /api/shifts/sections, PUT /api/shifts/sections/{id}, GET .../{id}/settings).
+  A department (Multimedia, SEO) serves every category: it has no categories, and its rota is granted on the section.
 *@
 
 <PageHeader Title="@L["Shift sections"]" />
@@ -15,6 +16,9 @@
     <div>
       <p class="mud-typography mud-typography-body1 sh-muted">
         @L["A section is a desk with the categories it covers. A shift's rota is granted on its section's categories. Leave the timings empty to use the organisation's defaults."]
+      </p>
+      <p class="mud-typography mud-typography-body2 sh-muted">
+        @L["A department (Multimedia, SEO) serves every category: the contents routed to it, whatever their category. Its rota is granted on the department itself."]
       </p>
     </div>
     <div class="sh-actions">
@@ -31,13 +35,22 @@
   @if (_form is not null)
   {
     <section class="mud-paper mud-elevation-2 sh-card">
-      <h2 class="mud-typography mud-typography-h6">@(_form.Id is null ? "New section" : $"Edit section #{_form.Id}")</h2>
+      <h2 class="mud-typography mud-typography-h6">@(_form.Id is null ? L["New section"] : L["Edit section #{0}", _form.Id])</h2>
       <form class="sh-form" @onsubmit="SaveAsync" @onsubmit:preventDefault>
         <div class="sh-grid">
           <div class="mud-input-control">
             <label class="mud-input-label" for="sh-name">@L["Name"]</label>
             <div class="mud-input-wrapper">
               <input id="sh-name" class="mud-input-slot" @bind="_form.Name" required maxlength="200" />
+            </div>
+          </div>
+          <div class="mud-input-control">
+            <label class="mud-input-label" for="sh-kind">@L["Kind"]</label>
+            <div class="mud-input-wrapper mud-input-wrapper--select">
+              <select id="sh-kind" class="mud-input-slot" @bind="_form.Kind">
+                <option value="@SectionKind.Category">@L["Category section"]</option>
+                <option value="@SectionKind.Department">@L["Department (all categories)"]</option>
+              </select>
             </div>
           </div>
           <div class="mud-input-control">
@@ -52,16 +65,25 @@
               <input id="sh-grace" type="number" min="0" class="mud-input-slot" @bind="_form.CheckoutGraceMinutes" />
             </div>
           </div>
-          <div class="mud-input-control sh-wide">
-            <label class="mud-input-label" for="sh-categories">@L["Categories"]</label>
-            <div class="mud-input-wrapper">
-              <input id="sh-categories" class="mud-input-slot" @bind="_form.Categories" placeholder="@L["politics, economy"]" />
+          @if (_form.Kind == SectionKind.Department)
+          {
+            <div class="mud-input-control sh-wide">
+              <div class="mud-input-helper-text">@L["A department serves every category, so it takes no categories. Changing the kind re-grants the rota of shifts that have not ended."]</div>
             </div>
-            <div class="mud-input-helper-text">@L["Content category ids, separated by commas. Changing them re-grants the rota of shifts that have not ended."]</div>
-          </div>
+          }
+          else
+          {
+            <div class="mud-input-control sh-wide">
+              <label class="mud-input-label" for="sh-categories">@L["Categories"]</label>
+              <div class="mud-input-wrapper">
+                <input id="sh-categories" class="mud-input-slot" @bind="_form.Categories" placeholder="@L["politics, economy"]" required />
+              </div>
+              <div class="mud-input-helper-text">@L["Content category ids, separated by commas. Changing them re-grants the rota of shifts that have not ended."]</div>
+            </div>
+          }
         </div>
         <div class="sh-row-actions">
-          <button type="submit" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" disabled="@Busy">@(_form.Id is null ? "Add section" : "Save")</button>
+          <button type="submit" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" disabled="@Busy">@(_form.Id is null ? L["Add section"] : L["Save"])</button>
           <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _form = null">@L["Cancel"]</button>
         </div>
       </form>
@@ -90,6 +112,7 @@
   {
     public int? Id { get; init; }
     public string Name { get; set; } = "";
+    public SectionKind Kind { get; set; } = SectionKind.Category;
     public string Categories { get; set; } = "";
     public int? AutoAssignDelayMinutes { get; set; }
     public int? CheckoutGraceMinutes { get; set; }
@@ -99,6 +122,7 @@
   [
     new { key = "id", title = L["#"].Value, type = "number", width = "80px" },
     new { key = "name", title = L["Name"].Value },
+    new { key = "kind", title = L["Kind"].Value, width = "140px" },
     new { key = "categories", title = L["Categories"].Value },
     new { key = "delay", title = L["Auto-assign (min)"].Value, width = "160px" },
     new { key = "grace", title = L["Grace (min)"].Value, width = "130px" },
@@ -133,10 +157,13 @@
   {
     id = s.Id.ToString(),
     name = s.Name,
-    categories = string.Join(", ", s.Categories),
+    kind = KindText(s.Kind),
+    categories = s.Kind == SectionKind.Department ? L["All categories"].Value : string.Join(", ", s.Categories),
     delay = s.AutoAssignDelayMinutes?.ToString() ?? L["default"].Value,
     grace = s.CheckoutGraceMinutes?.ToString() ?? L["default"].Value,
   };
+
+  private string KindText(SectionKind kind) => kind == SectionKind.Department ? L["Department"] : L["Category section"];
 
   private string SectionName(int id) => _sections.FirstOrDefault(s => s.Id == id)?.Name ?? $"#{id}";
 
@@ -149,6 +176,7 @@
       {
         Id = section.Id,
         Name = section.Name,
+        Kind = section.Kind,
         Categories = string.Join(", ", section.Categories),
         AutoAssignDelayMinutes = section.AutoAssignDelayMinutes,
         CheckoutGraceMinutes = section.CheckoutGraceMinutes,
@@ -171,8 +199,10 @@
     var request = new SectionRequest
     {
       Name = form.Name.Trim(),
-      Categories = form.Categories.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-        .Distinct().ToList(),
+      Kind = form.Kind,
+      // A department takes no categories: whatever was typed before switching the kind is dropped.
+      Categories = form.Kind == SectionKind.Department ? [] : form.Categories
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct().ToList(),
       AutoAssignDelayMinutes = form.AutoAssignDelayMinutes,
       CheckoutGraceMinutes = form.CheckoutGraceMinutes,
     };

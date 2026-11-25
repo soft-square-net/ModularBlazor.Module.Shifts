@@ -36,6 +36,11 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.O
                     b.Property<int?>("CheckoutGraceMinutes")
                         .HasColumnType("NUMBER(10)");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("NVARCHAR2(16)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -47,6 +52,8 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.O
                         .HasColumnType("NVARCHAR2(64)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Kind");
 
                     b.HasIndex("TenantId");
 
@@ -70,6 +77,8 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.O
                         .HasColumnType("NUMBER(10)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
 
                     b.HasIndex("SectionId");
 

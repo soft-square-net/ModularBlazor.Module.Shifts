@@ -10,8 +10,8 @@ public sealed class Update : IEndpoint
         app.MapPut("/sections/{id:int}", HandleAsync)
             .RequirePermission(ShiftPermissions.Manage)
             .WithName("Shifts_UpdateSection")
-            .WithSummary("Changing the categories rewrites the grants of the section's published shifts that have not ended.");
+            .WithSummary("Changing the categories or the kind rewrites the grants of the section's published shifts that have not ended.");
 
     private static async Task<Results<Ok<SectionDto>, ProblemHttpResult>> HandleAsync(int id, SectionRequest r, ISender sender, CancellationToken ct) =>
-        (await sender.Send(new UpdateSectionCommand(id, r.Name, r.Categories, r.AutoAssignDelayMinutes, r.CheckoutGraceMinutes), ct)).ToOkResult();
+        (await sender.Send(new UpdateSectionCommand(id, r.Name, r.Categories, r.AutoAssignDelayMinutes, r.CheckoutGraceMinutes, r.Kind), ct)).ToOkResult();
 }

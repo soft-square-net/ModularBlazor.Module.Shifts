@@ -83,5 +83,15 @@
   "not found, or not visible to you.": "غير موجود، أو غير مرئي لك.",
   "the shift does not allow this now. Reload and try again.": "لا تسمح المناوبة بذلك الآن. أعد التحميل وحاول مجددًا.",
   "The gateway is not reachable ({0}).": "تعذّر الوصول إلى البوابة ({0}).",
-  "you ({0})": "أنت ({0})"
+  "you ({0})": "أنت ({0})",
+  "A department (Multimedia, SEO) serves every category: the contents routed to it, whatever their category. Its rota is granted on the department itself.": "الإدارة (الوسائط المتعددة، تحسين محركات البحث) تخدم كل الفئات: المحتويات المحالة إليها أيًّا كانت فئتها. وتُمنح صلاحيات جدول مناوبتها على الإدارة نفسها.",
+  "Edit section #{0}": "تعديل القسم رقم {0}",
+  "Add section": "إضافة قسم",
+  "Kind": "النوع",
+  "Category section": "قسم فئات",
+  "Department (all categories)": "إدارة (كل الفئات)",
+  "Department": "إدارة",
+  "All categories": "كل الفئات",
+  "A department serves every category, so it takes no categories. Changing the kind re-grants the rota of shifts that have not ended.": "تخدم الإدارة كل الفئات، لذا لا تُحدَّد لها فئات. تغيير النوع يعيد منح صلاحيات جداول المناوبات التي لم تنتهِ.",
+  "{0} (department)": "{0} (إدارة)"
 }

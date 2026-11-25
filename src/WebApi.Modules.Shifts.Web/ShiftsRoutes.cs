@@ -16,6 +16,7 @@ public sealed class ShiftsRoutes : ICarterModule
         var shifts = app.MapGroup("").AddEndpointFilter<ShiftsProblemsFilter>();
 
         Sections.List.Map(shifts);
+        Sections.ListServing.Map(shifts);
         Sections.Add.Map(shifts);
         Sections.Update.Map(shifts);
         Sections.GetSettings.Map(shifts);
