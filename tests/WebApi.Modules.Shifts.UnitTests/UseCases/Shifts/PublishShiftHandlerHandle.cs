@@ -8,7 +8,11 @@ public class PublishShiftHandlerHandle
     private readonly ShiftsFixture _fixture = new("admin-1");
     private readonly PublishShiftHandler _handler;
 
-    public PublishShiftHandlerHandle() => _handler = new PublishShiftHandler(_fixture.Changes);
+    public PublishShiftHandlerHandle()
+    {
+        _fixture.ShiftAdmin();
+        _handler = new PublishShiftHandler(_fixture.Changes, _fixture.Authority);
+    }
 
     [Fact]
     public async Task IsNotFoundWithoutTheShift()

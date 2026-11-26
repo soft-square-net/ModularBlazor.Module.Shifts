@@ -2,6 +2,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using soft.square.net.WebApi.Modules.Shifts.Infrastructure;
 using soft.square.net.WebApi.Modules.Shifts.Infrastructure.Organization;
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Authority;
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Roles;
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Templates;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Shifts;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Units;
 
@@ -29,6 +32,17 @@ public static class ServiceConfigs
         services.AddScoped<ShiftDetails>();
         services.AddScoped<ShiftChanges>();
         services.AddScoped<ShiftUnits>();
+        services.AddScoped<ShiftAuthority>();
+
+        // Roles as data, the rota's checks, and templates.
+        services.AddScoped<ShiftRoles>();
+        services.AddScoped<UnitMembers>();
+        services.AddScoped<ShiftRota>();
+        services.AddScoped<RoleUsage>();
+        services.AddScoped<RoleGrants>();
+        services.AddScoped<RolePermissions>();
+        services.AddScoped<SeedShiftRoles>();
+        services.AddScoped<TemplateRules>();
 
         services.AddMediatorSourceGen();
         return services;

@@ -69,7 +69,7 @@
 
   @if (_form is not null)
   {
-    <ShiftEditor Form="_form" Sections="_sections" Busy="Busy" Me="@Me" OnSave="CreateAsync" OnCancel="() => _form = null" />
+    <ShiftEditor Form="_form" Sections="_sections" Roles="_roles" Busy="Busy" Me="@Me" OnSave="CreateAsync" OnCancel="() => _form = null" />
   }
 
   <section class="mud-paper mud-elevation-1 sh-card">
@@ -96,6 +96,7 @@
   private DateTime _from = DateTime.Today;
   private List<ShiftDto> _shifts = [];
   private List<SectionDto> _sections = [];
+  private List<RoleDefinitionDto> _roles = [];
   private ShiftForm? _form;
 
   // One text for every view: the table reads it once, when it is created.
@@ -112,6 +113,7 @@
     {
       var api = Api;
       _sections = (await api.ListSectionsAsync()).ToList();
+      _roles = (await api.ListEffectiveRolesAsync()).ToList();
       var shifts = _view switch
       {
         View.Mine => await api.ListMineAsync(),

@@ -5,7 +5,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.UnitTests.UseCases.Shifts;
 
 public class CheckOutShiftHandlerHandle
 {
-    private static CheckOutShiftHandler HandlerFor(ShiftsFixture fixture) => new(fixture.Changes, fixture.Caller);
+    private static CheckOutShiftHandler HandlerFor(ShiftsFixture fixture) => new(fixture.Changes, fixture.Caller, fixture.Authority);
 
     [Fact]
     public async Task ForbidsSomeoneWhoIsNeitherTheManagerNorAShiftAdmin()

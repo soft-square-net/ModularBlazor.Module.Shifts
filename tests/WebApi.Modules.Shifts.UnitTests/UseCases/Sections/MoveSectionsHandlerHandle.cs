@@ -52,14 +52,15 @@ public class MoveSectionsHandlerHandle
         });
 
         _handler = new MoveSectionsToOrganizationHandler(_fixture.SectionReader, _maps, _fixture.Shifts, _fixture.Units, _organization, _events,
-            _fixture.ShiftGrants, _fixture.Caller, NullLogger<MoveSectionsToOrganizationHandler>.Instance);
+            _fixture.ShiftGrants, _fixture.Caller, _fixture.Authority, NullLogger<MoveSectionsToOrganizationHandler>.Instance);
+        _fixture.ShiftAdmin();
     }
 
     /// <summary>The shift specifications of the handler filter by section; the fake answers for the politics section only.</summary>
     private static bool Matches(ISpecification<Shift> spec, int sectionId) => spec.Evaluate([ShiftWithSection(sectionId)]).Any();
 
     private static Shift ShiftWithSection(int sectionId) =>
-        Shift.Create(sectionId, TestClock.Start.AddDays(1), TestClock.Start.AddDays(1).AddHours(1), [("m", ShiftRole.Manager)]);
+        Shift.Create(sectionId, TestClock.Start.AddDays(1), TestClock.Start.AddDays(1).AddHours(1), [ShiftBuilder.Lead("m")]);
 
     private static OrgApi.OrgUnitDto Unit(Guid id, string name, IReadOnlyList<string> tags, IReadOnlyList<string> categories) => new()
     {

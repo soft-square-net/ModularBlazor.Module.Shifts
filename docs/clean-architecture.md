@@ -12,9 +12,15 @@ src/
     SectionAggregate/Section.cs          a desk and the categories it covers, or a department (SectionKind) that serves them all; optional timer overrides
     SectionAggregate/Specifications/     SectionByIdSpec, SectionsWithCategoriesSpec, SectionsServingCategorySpec
     ShiftAggregate/Shift.cs              a shift on the clock and its rota; rules throw DomainException
-    ShiftAggregate/Specifications/       ShiftByIdSpec, ShiftsInWindowSpec, MemberShiftsSpec, OverdueShiftsSpec
+    ShiftAggregate/Specifications/       ShiftByIdSpec, ShiftsInWindowSpec, MemberShiftsSpec, OverdueShiftsSpec, ShiftsNotEndedWithRoleSpec
+    RoleAggregate/ShiftRoleDefinition.cs a rota role: key, names, permissions, lead flag, tenant-wide or for one unit
+    TemplateAggregate/ShiftTemplate.cs   a unit's recurring shift: local start, duration, slots, default members; its window on a day
   WebApi.Modules.Shifts.UseCases/        UseCases   (ModuleLayer Application)
-    ShiftPermissions.cs RoleTemplates.cs ShiftOptions.cs ShiftCaller.cs ResultExtensions.cs
+    ShiftPermissions.cs ShiftOptions.cs ShiftCaller.cs ResultExtensions.cs
+    Authority/ShiftAuthority.cs          shifts.manage on a unit's scopes (UnitScopes.For), or tenant-wide
+    Roles/                               role CRUD; ShiftRoles (the definitions that hold for a unit), ShiftRota,
+                                         UnitMembers (D6), RoleUsage, DefaultShiftRoles
+    Templates/                           template CRUD and Clone
     Behaviors/LoggingBehavior.cs         Mediator pipeline behaviour
     Sections/                            List, Add, Update, GetSettings; SectionDto, SectionSettings
     Shifts/                              List, ListMine, ListOverdue, GetById, GetAutomation, Add, Update, Publish,
@@ -67,11 +73,12 @@ Core  <-  UseCases  <-  Web
 
 This is what the module is for, so it is worth knowing where each part lives:
 
-- **Core** decides who is on a shift and until when: `Shift.SetRota` (exactly one Manager), `CheckOut`,
+- **Core** decides who is on a shift and until when: `Shift.SetRota` (at most one lead; exactly one to publish), `CheckOut`,
   `CheckOutMember`, and `EndOf(member)`, the moment a member's access ends.
-- **UseCases** turns that into grants. `RoleTemplates` lists the content permissions of each role (plain strings: the
-  shifts module never references the content module). `ShiftGrants.WriteAsync` writes every member's permissions on
-  every scope of the section (`Section.Scopes`: `category:{id}` per category, or `section:{id}` for a department),
+- **UseCases** turns that into grants. Each member's permissions are those of the role definition that holds for the
+  shift's unit (`ShiftRoles`: the nearest one up the unit's path, else the tenant's; plain strings checked against the
+  permission catalog, so the shifts module never references the content module). `ShiftGrants.WriteAsync` writes them
+  on every scope of the shift (its unit's, and its section's: `category:{id}` per category, or `section:{id}` for a department),
   valid from the start to `EndOf(member)`, with one
   `IGrantStore.ReplaceSourceAsync("shift:{id}", ...)`. Nothing is written until the shift is published.
 - **ShiftChanges** is the shape of every change to a shift: load it, check who may do it, call the aggregate, save, and

@@ -87,6 +87,56 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.S
                     b.ToTable("integration_outbox", "shifts");
                 });
 
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.RoleAggregate.ShiftRoleDefinition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsLead")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Permissions")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid?>("UnitId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "UnitId", "Key")
+                        .IsUnique()
+                        .HasFilter("[UnitId] IS NOT NULL");
+
+                    b.ToTable("shift_roles", "shifts");
+                });
+
             modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate.Section", b =>
                 {
                     b.Property<int>("Id")
@@ -210,7 +260,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.S
                     b.Property<bool>("Published")
                         .HasColumnType("bit");
 
-                    b.Property<int>("SectionId")
+                    b.Property<int?>("SectionId")
                         .HasColumnType("int");
 
                     b.Property<DateTimeOffset>("StartsAt")
@@ -246,10 +296,13 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.S
                     b.Property<DateTimeOffset?>("CheckedOutAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<string>("Role")
+                    b.Property<bool>("IsLead")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("RoleKey")
                         .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("nvarchar(16)");
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int?>("ShiftId")
                         .HasColumnType("int");
@@ -266,6 +319,96 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.S
                     b.HasIndex("UserId");
 
                     b.ToTable("shift_members", "shifts");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.TemplateAggregate.ShiftTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<long>("Duration")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<long>("StartLocal")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("UnitId");
+
+                    b.ToTable("shift_templates", "shifts");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.TemplateAggregate.ShiftTemplateMember", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("RoleKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int?>("TemplateId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TemplateId");
+
+                    b.ToTable("shift_template_members", "shifts");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.TemplateAggregate.ShiftTemplateSlot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Count")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RoleKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int?>("TemplateId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TemplateId");
+
+                    b.ToTable("shift_template_slots", "shifts");
                 });
 
             modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.UnitAggregate.CachedUnit", b =>
@@ -349,6 +492,22 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.S
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.TemplateAggregate.ShiftTemplateMember", b =>
+                {
+                    b.HasOne("soft.square.net.WebApi.Modules.Shifts.Core.TemplateAggregate.ShiftTemplate", null)
+                        .WithMany("DefaultMembers")
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.TemplateAggregate.ShiftTemplateSlot", b =>
+                {
+                    b.HasOne("soft.square.net.WebApi.Modules.Shifts.Core.TemplateAggregate.ShiftTemplate", null)
+                        .WithMany("Slots")
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
             modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate.Section", b =>
                 {
                     b.Navigation("Categories");
@@ -357,6 +516,13 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.S
             modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate.Shift", b =>
                 {
                     b.Navigation("Members");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.TemplateAggregate.ShiftTemplate", b =>
+                {
+                    b.Navigation("DefaultMembers");
+
+                    b.Navigation("Slots");
                 });
 #pragma warning restore 612, 618
         }

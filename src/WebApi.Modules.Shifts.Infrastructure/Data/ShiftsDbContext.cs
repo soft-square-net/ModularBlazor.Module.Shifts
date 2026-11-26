@@ -2,8 +2,10 @@ using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using soft.square.net.WebApi.Contracts.Tenancy;
 using soft.square.net.WebApi.Data;
+using soft.square.net.WebApi.Modules.Shifts.Core.RoleAggregate;
 using soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate;
 using soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate;
+using soft.square.net.WebApi.Modules.Shifts.Core.TemplateAggregate;
 using soft.square.net.WebApi.Modules.Shifts.Core.UnitAggregate;
 
 namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data;
@@ -24,6 +26,8 @@ public sealed class ShiftsDbContext(DbContextOptions<ShiftsDbContext> options, I
     public DbSet<SectionUnitMap> SectionUnitMaps => Set<SectionUnitMap>();
     public DbSet<Shift> Shifts => Set<Shift>();
     public DbSet<CachedUnit> Units => Set<CachedUnit>();
+    public DbSet<ShiftRoleDefinition> Roles => Set<ShiftRoleDefinition>();
+    public DbSet<ShiftTemplate> Templates => Set<ShiftTemplate>();
 
     protected override void ConfigureModel(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
