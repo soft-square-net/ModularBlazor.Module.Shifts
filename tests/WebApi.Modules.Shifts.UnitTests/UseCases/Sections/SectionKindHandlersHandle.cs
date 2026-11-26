@@ -22,6 +22,16 @@ public class SectionKindHandlersHandle
         return sections;
     }
 
+    /// <summary>A tenant-wide shift admin, who may add and change sections.</summary>
+    private static ShiftsFixture Admin()
+    {
+        var fixture = new ShiftsFixture("admin-1");
+        fixture.ShiftAdmin();
+        return fixture;
+    }
+
+    private static AddSectionHandler AddHandler() => new(AddingRepository(), Substitute.For<IReadRepository<SectionUnitMap>>(), Admin().Authority);
+
     private static IRepository<Section> Holding(Section section)
     {
         var sections = Substitute.For<IRepository<Section>>();
@@ -32,8 +42,7 @@ public class SectionKindHandlersHandle
     [Fact]
     public async Task AddsADepartment()
     {
-        var result = await new AddSectionHandler(AddingRepository(), Substitute.For<IReadRepository<SectionUnitMap>>())
-            .Handle(new AddSectionCommand("SEO", [], null, null, SectionKind.Department), Ct);
+        var result = await AddHandler().Handle(new AddSectionCommand("SEO", [], null, null, SectionKind.Department), Ct);
 
         result.IsSuccess.ShouldBeTrue();
         result.Value.Kind.ShouldBe(SectionKind.Department);
@@ -43,7 +52,7 @@ public class SectionKindHandlersHandle
     [Fact]
     public async Task AddsACategorySectionWhenNoKindIsGiven()
     {
-        var result = await new AddSectionHandler(AddingRepository(), Substitute.For<IReadRepository<SectionUnitMap>>()).Handle(new AddSectionCommand("Sport", ["sport"], null, null), Ct);
+        var result = await AddHandler().Handle(new AddSectionCommand("Sport", ["sport"], null, null), Ct);
 
         result.Value.Kind.ShouldBe(SectionKind.Category);
     }
@@ -51,11 +60,11 @@ public class SectionKindHandlersHandle
     [Fact]
     public async Task AnUpdateWithoutAKindKeepsTheDepartment()
     {
-        var fixture = new ShiftsFixture("admin-1");
+        var fixture = Admin();
         fixture.ShiftReader.ListAsync(Arg.Any<ISpecification<Shift>>(), Arg.Any<CancellationToken>()).Returns([]);
         var sections = Holding(Section.CreateDepartment("Multimedia").WithId(4));
 
-        var result = await new UpdateSectionHandler(sections, fixture.ShiftReader, fixture.Moved, fixture.ShiftGrants, fixture.Caller)
+        var result = await new UpdateSectionHandler(sections, fixture.ShiftReader, fixture.Moved, fixture.ShiftGrants, fixture.Caller, fixture.Authority)
             .Handle(new UpdateSectionCommand(4, "Photo and video", [], 1, null), Ct);
 
         result.IsSuccess.ShouldBeTrue();
@@ -66,12 +75,12 @@ public class SectionKindHandlersHandle
     [Fact]
     public async Task TurningASectionIntoADepartmentRegrantsItsShiftsOnTheSection()
     {
-        var fixture = new ShiftsFixture("admin-1");
+        var fixture = Admin();
         var shift = ShiftBuilder.Published(fixture.Clock.Now.AddHours(1));
         fixture.ShiftReader.ListAsync(Arg.Any<ISpecification<Shift>>(), Arg.Any<CancellationToken>()).Returns([shift]);
         var sections = Holding(Section.Create("Desk", ["politics"], null, null).WithId(1));
 
-        var result = await new UpdateSectionHandler(sections, fixture.ShiftReader, fixture.Moved, fixture.ShiftGrants, fixture.Caller)
+        var result = await new UpdateSectionHandler(sections, fixture.ShiftReader, fixture.Moved, fixture.ShiftGrants, fixture.Caller, fixture.Authority)
             .Handle(new UpdateSectionCommand(1, "Multimedia", [], null, null, SectionKind.Department), Ct);
 
         result.IsSuccess.ShouldBeTrue();
@@ -81,14 +90,14 @@ public class SectionKindHandlersHandle
     [Fact]
     public async Task PublishingADepartmentShiftGrantsTheRotaOnTheDepartment()
     {
-        var fixture = new ShiftsFixture("admin-1");
+        var fixture = Admin();
         var department = Section.CreateDepartment("Multimedia").WithId(1);
         fixture.SectionReader.FirstOrDefaultAsync(Arg.Any<ISpecification<Section>>(), Arg.Any<CancellationToken>()).Returns(department);
         fixture.SectionReader.ListAsync(Arg.Any<ISpecification<Section>>(), Arg.Any<CancellationToken>()).Returns([department]);
         var shift = ShiftBuilder.Planned(fixture.Clock.Now.AddHours(1));
         fixture.Stored(shift);
 
-        var result = await new PublishShiftHandler(fixture.Changes).Handle(new PublishShiftCommand(shift.Id), Ct);
+        var result = await new PublishShiftHandler(fixture.Changes, fixture.Authority).Handle(new PublishShiftCommand(shift.Id), Ct);
 
         result.IsSuccess.ShouldBeTrue();
         var grants = fixture.WrittenGrants(shift);

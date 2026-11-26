@@ -7,7 +7,8 @@ using soft.square.net.WebApi.Modules.Shifts.Web.Configurations;
 namespace soft.square.net.WebApi.Modules.Shifts.Web;
 
 /// <summary>
-/// Shifts module: sections (the categories a desk covers), shifts on the clock and their rota (Manager, Desk, Editor).
+/// Shifts module: sections (the categories a desk covers), shifts on the clock and their rota. Rota roles are data (role
+/// definitions, tenant-wide or per unit; manager, desk and editor are seeded), and units have shift templates.
 /// A published rota becomes time-windowed grants in the host (source <c>shift:{id}</c>), so newsroom rights start and
 /// end with the shift, or earlier on check-out. Shifts belong to Organization units, which the module follows in a cache
 /// (the <c>org.unit-*</c> and <c>org.membership-changed</c> events); it publishes <c>shifts.section-moved.v1</c> when a
@@ -19,7 +20,7 @@ public sealed class ShiftsModule : IRuntimeModule
 {
     public ModuleManifest Manifest { get; } = new("shifts", "Shifts", "0.1.0", "shifts")
     {
-        Description = "Newsroom shifts: sections, rota (Manager, Desk, Editor), check-out; the rota becomes time-windowed grants.",
+        Description = "Newsroom shifts: units, rota roles as data, templates, check-out; the rota becomes time-windowed grants.",
         DefaultSettings = new Dictionary<string, string?>
         {
             ["Shifts:AutoAssignDelay"] = "00:05:00",

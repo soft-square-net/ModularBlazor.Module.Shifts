@@ -12,7 +12,7 @@ public class CheckOutMemberHandlerHandle
         var shift = ShiftBuilder.Published(fixture.Clock.Now.AddHours(-1));
         fixture.Stored(shift);
 
-        var result = await new CheckOutMemberHandler(fixture.Changes, fixture.Caller)
+        var result = await new CheckOutMemberHandler(fixture.Changes, fixture.Caller, fixture.Authority)
             .Handle(new CheckOutMemberCommand(shift.Id, ShiftBuilder.Editor), TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeTrue();
@@ -28,7 +28,7 @@ public class CheckOutMemberHandlerHandle
         var shift = ShiftBuilder.Published(fixture.Clock.Now.AddHours(-1));
         fixture.Stored(shift);
 
-        var result = await new CheckOutMemberHandler(fixture.Changes, fixture.Caller)
+        var result = await new CheckOutMemberHandler(fixture.Changes, fixture.Caller, fixture.Authority)
             .Handle(new CheckOutMemberCommand(shift.Id, ShiftBuilder.Desk), TestContext.Current.CancellationToken);
 
         result.Status.ShouldBe(ResultStatus.Forbidden);

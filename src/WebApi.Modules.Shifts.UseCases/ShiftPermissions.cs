@@ -8,7 +8,7 @@ public static class ShiftPermissions
 
     public static IReadOnlyList<PermissionDefinition> All { get; } =
     [
-        new(View, "See sections, shifts and rotas."),
-        new(Manage, "Manage sections, plan and publish shifts, check shifts out.")
+        new(View, "See sections, shifts, rotas, role definitions and templates."),
+        new(Manage, "Plan, publish and check out shifts, and manage role definitions and templates, of the units it is granted on (and the units below them); tenant-wide also sections, tenant-wide roles and the unit cache.")
     ];
 }

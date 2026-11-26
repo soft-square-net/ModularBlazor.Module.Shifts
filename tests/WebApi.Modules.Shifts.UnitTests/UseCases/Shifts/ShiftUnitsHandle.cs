@@ -27,11 +27,13 @@ public class ShiftUnitsHandle
     {
         _fixture.SectionReader.GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(_fixture.Section);
         _fixture.Shifts.AddAsync(Arg.Any<Shift>(), Arg.Any<CancellationToken>()).Returns(c => c.Arg<Shift>());
-        _add = new AddShiftHandler(_fixture.Shifts, _fixture.SectionReader, _fixture.ShiftUnits, _fixture.Details);
+        _fixture.ShiftAdmin();
+        _fixture.Member(Department, "m"); // the rota's person belongs to the Department, so to both of its Sections (D6)
+        _add = new AddShiftHandler(_fixture.Shifts, _fixture.SectionReader, _fixture.ShiftUnits, _fixture.Rota, _fixture.Authority, _fixture.Details);
     }
 
     private Task<Result<ShiftDto>> Add(Guid? unitId) => _add.Handle(new AddShiftCommand(1, _fixture.Clock.Now.AddHours(1), _fixture.Clock.Now.AddHours(9),
-        [new RotaEntry("m", ShiftRole.Manager)], unitId), Ct).AsTask();
+        [new RotaEntry("m", "manager")], unitId), Ct).AsTask();
 
     private void SectionMovedTo(Guid unitId) =>
         _fixture.Moved.FirstOrDefaultAsync(Arg.Any<ISpecification<SectionUnitMap>>(), Arg.Any<CancellationToken>())
@@ -117,9 +119,9 @@ public class ShiftUnitsHandle
         await _fixture.Units.ApplyAsync(State(SeoUnit()), Ct);
         var shift = ShiftBuilder.Planned(_fixture.Clock.Now.AddHours(1));
         _fixture.Stored(shift);
-        var update = new UpdateShiftHandler(_fixture.Changes, _fixture.ShiftUnits);
+        var update = new UpdateShiftHandler(_fixture.Changes, _fixture.ShiftUnits, _fixture.Rota, _fixture.Authority);
         UpdateShiftCommand Command(Guid unitId) =>
-            new(shift.Id, shift.SectionId, shift.StartsAt, shift.EndsAt, [new RotaEntry("m", ShiftRole.Manager)], unitId);
+            new(shift.Id, shift.SectionId!.Value, shift.StartsAt, shift.EndsAt, [new RotaEntry("m", "manager")], unitId);
 
         (await update.Handle(Command(Sport), Ct)).Value.UnitId.ShouldBe(Sport);
         (await update.Handle(Command(Seo), Ct)).Status.ShouldBe(ResultStatus.Conflict);
@@ -132,8 +134,8 @@ public class ShiftUnitsHandle
         _fixture.Moved.AnyAsync(Arg.Any<CancellationToken>()).Returns(true);
         var sections = Substitute.For<IRepository<Section>>();
 
-        var added = await new AddSectionHandler(sections, _fixture.Moved).Handle(new AddSectionCommand("Sport", ["sport"], null, null), Ct);
-        var updated = await new UpdateSectionHandler(sections, _fixture.ShiftReader, _fixture.Moved, _fixture.ShiftGrants, _fixture.Caller)
+        var added = await new AddSectionHandler(sections, _fixture.Moved, _fixture.Authority).Handle(new AddSectionCommand("Sport", ["sport"], null, null), Ct);
+        var updated = await new UpdateSectionHandler(sections, _fixture.ShiftReader, _fixture.Moved, _fixture.ShiftGrants, _fixture.Caller, _fixture.Authority)
             .Handle(new UpdateSectionCommand(1, "Sport", ["sport"], null, null), Ct);
 
         added.Status.ShouldBe(ResultStatus.Conflict);

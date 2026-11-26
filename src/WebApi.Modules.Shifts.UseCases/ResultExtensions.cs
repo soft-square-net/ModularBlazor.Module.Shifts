@@ -10,6 +10,7 @@ public static class ResultExtensions
         ResultStatus.Conflict => Result<T>.Conflict([.. failure.Errors]),
         ResultStatus.Unauthorized => Result<T>.Unauthorized([.. failure.Errors]),
         ResultStatus.Invalid => Result<T>.Invalid([.. failure.ValidationErrors]),
+        ResultStatus.Unavailable => Result<T>.Unavailable([.. failure.Errors]),
         ResultStatus.Ok => throw new InvalidOperationException("Only a failed result converts."),
         _ => Result<T>.Error(new ErrorList([.. failure.Errors]))
     };
@@ -22,6 +23,7 @@ public static class ResultExtensions
         ResultStatus.Conflict => Result<TOther>.Conflict([.. failure.Errors]),
         ResultStatus.Unauthorized => Result<TOther>.Unauthorized([.. failure.Errors]),
         ResultStatus.Invalid => Result<TOther>.Invalid([.. failure.ValidationErrors]),
+        ResultStatus.Unavailable => Result<TOther>.Unavailable([.. failure.Errors]),
         ResultStatus.Ok => throw new InvalidOperationException("Only a failed result converts."),
         _ => Result<TOther>.Error(new ErrorList([.. failure.Errors]))
     };

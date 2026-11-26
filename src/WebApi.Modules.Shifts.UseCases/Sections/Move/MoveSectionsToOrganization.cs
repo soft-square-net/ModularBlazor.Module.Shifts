@@ -7,6 +7,7 @@ using soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate.Specifications
 using soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate;
 using soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate.Specifications;
 using soft.square.net.WebApi.Modules.Shifts.Core.UnitAggregate;
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Authority;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Shifts;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Units;
 using OrgApi = soft.square.net.WebApi.Modules.Organization.Client;
@@ -53,11 +54,14 @@ public sealed class MoveSectionsToOrganizationHandler(
     IIntegrationEvents events,
     ShiftGrants grants,
     ShiftCaller caller,
+    ShiftAuthority authority,
     ILogger<MoveSectionsToOrganizationHandler> log) : ICommandHandler<MoveSectionsToOrganizationCommand, Result<SectionMoveReport>>
 {
     public async ValueTask<Result<SectionMoveReport>> Handle(MoveSectionsToOrganizationCommand command, CancellationToken ct)
     {
         var me = caller.Me;
+        var allowed = await authority.RequireTenantManageAsync(ct);
+        if (!allowed.IsSuccess) return allowed.As<SectionMoveReport>();
         var all = await sections.ListAsync(new SectionsWithCategoriesSpec(), ct);
         var moved = (await maps.ListAsync(new SectionUnitMapsSpec(), ct)).ToDictionary(m => m.SectionId);
         var links = (command.Links ?? []).GroupBy(l => l.SectionId).ToDictionary(g => g.Key, g => g.Last().UnitId);

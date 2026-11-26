@@ -69,7 +69,7 @@
 
     @if (_form is not null)
     {
-      <ShiftEditor Form="_form" Sections="_sections" Title="@L["Edit shift"]" SubmitText="@L["Save"]" SectionLocked="true"
+      <ShiftEditor Form="_form" Sections="_sections" Roles="_roles" Title="@L["Edit shift"]" SubmitText="@L["Save"]" SectionLocked="true"
                    Busy="Busy" Me="@Me" OnSave="SaveAsync" OnCancel="() => _form = null" />
     }
 
@@ -89,7 +89,7 @@
               {
                 <tr>
                   <td>@Who(member.UserId)</td>
-                  <td>@member.Role</td>
+                  <td>@member.RoleKey@(member.IsLead ? " ★" : "")</td>
                   <td>@(_shift.Published ? When(member.AccessEnds) : L["not published"])</td>
                   <td>@When(member.CheckedOutAt)</td>
                   <td>
@@ -133,6 +133,7 @@
   private ShiftDto? _shift;
   private ShiftAutomationInfo? _automation;
   private List<SectionDto> _sections = [];
+  private List<RoleDefinitionDto> _roles = [];
   private ShiftForm? _form;
   private bool _confirmDelete;
 
@@ -158,6 +159,7 @@
   {
     if (_shift is null) return;
     if (_sections.Count == 0) await RunAsync(async () => _sections = (await Api.ListSectionsAsync()).ToList());
+    if (_roles.Count == 0) await RunAsync(async () => _roles = (await Api.ListEffectiveRolesAsync(_shift.UnitId)).ToList());
     _form = ShiftForm.From(_shift);
   }
 

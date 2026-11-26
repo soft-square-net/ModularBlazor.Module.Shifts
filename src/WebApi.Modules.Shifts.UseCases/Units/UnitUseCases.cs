@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using soft.square.net.WebApi.Modules.Shifts.Core.UnitAggregate;
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Authority;
 
 namespace soft.square.net.WebApi.Modules.Shifts.UseCases.Units;
 
@@ -23,11 +24,13 @@ public sealed class ListUnitsHandler(UnitCache cache) : IQueryHandler<ListUnitsQ
 /// <summary>Refill the unit cache from the deployment's unit directory, as the signed-in admin.</summary>
 public sealed record ResyncUnitsCommand : ICommand<Result<UnitResyncResult>>;
 
-public sealed class ResyncUnitsHandler(UnitCache cache, IOrganizationAccess organization, ILogger<ResyncUnitsHandler> log)
+public sealed class ResyncUnitsHandler(UnitCache cache, IOrganizationAccess organization, ShiftAuthority authority, ILogger<ResyncUnitsHandler> log)
     : ICommandHandler<ResyncUnitsCommand, Result<UnitResyncResult>>
 {
     public async ValueTask<Result<UnitResyncResult>> Handle(ResyncUnitsCommand command, CancellationToken ct)
     {
+        var allowed = await authority.RequireTenantManageAsync(ct);
+        if (!allowed.IsSuccess) return allowed.As<UnitResyncResult>();
         if (!organization.Configured) return Result.Unavailable("Shifts:Organization:BaseUrl is not set: the module cannot reach Organization.");
         IReadOnlyList<soft.square.net.Organization.Contracts.DirectoryUnitDto> units;
         try { units = await organization.DirectoryAsCaller().ListAsync(ct); }

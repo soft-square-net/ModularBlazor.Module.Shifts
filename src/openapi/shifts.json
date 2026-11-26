@@ -2,7 +2,7 @@
   "openapi": "3.1.1",
   "info": {
     "title": "Shifts",
-    "description": "Newsroom shifts: sections, rota (Manager, Desk, Editor), check-out; the rota becomes time-windowed grants.",
+    "description": "Newsroom shifts: units, rota roles as data, templates, check-out; the rota becomes time-windowed grants.",
     "version": "0.1.0"
   },
   "servers": [
@@ -270,6 +270,360 @@
         }
       }
     },
+    "/api/shifts/roles": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "Every rota role definition of the tenant: the tenant-wide ones (unitId null) and every unit's overrides.",
+        "operationId": "Shifts_ListRoles",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RoleDefinitionDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "Adds a rota role: its key (a lowercase slug), names, the permissions it grants while a shift runs (from the platform's permission catalog) and whether it is the shift's lead. Tenant-wide (no unitId; needs shifts.manage tenant-wide) or for a unit and the units below it (needs shifts.manage on the unit).",
+        "operationId": "Shifts_AddRole",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleDefinitionDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shifts/roles/effective": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "The roles a rota of the unit can use: for each key, the definition nearest to the unit up its path (the unit's, a parent's, else the tenant's). Without unitId: the tenant-wide ones.",
+        "operationId": "Shifts_ListEffectiveRoles",
+        "parameters": [
+          {
+            "name": "unitId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RoleDefinitionDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shifts/roles/{id}": {
+      "put": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "Changes a role's names, permissions and lead flag (its key and unit stay). Published shifts that use it and have not ended get their grants rewritten. The lead flag cannot change while shifts or templates use the role (409).",
+        "operationId": "Shifts_UpdateRole",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleDefinitionDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "Removes a role definition. Refused (409) while shifts that have not ended or templates use it, unless another definition of the same key and lead flag (a parent unit's or the tenant's) takes over for them.",
+        "operationId": "Shifts_DeleteRole",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/shifts/templates": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "operationId": "Shifts_ListTemplates",
+        "parameters": [
+          {
+            "name": "unitId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShiftTemplateDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "Adds a shift template to a unit (needs shifts.manage on the unit): start (wall-clock, unit time zone), duration (at most 24h), role slots and default members (members of the unit or a unit above it; at most one in a lead role).",
+        "operationId": "Shifts_AddTemplate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftTemplateDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shifts/templates/{id}": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "operationId": "Shifts_GetTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftTemplateDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Shifts"
+        ],
+        "operationId": "Shifts_UpdateTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftTemplateDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Shifts"
+        ],
+        "operationId": "Shifts_DeleteTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/shifts/templates/{id}/clone": {
+      "post": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "Creates a Draft (unpublished) shift from the template on a calendar day of the unit's time zone, converted to UTC safely across daylight-saving changes. The rota is the default members; unfilled slots, a missing lead and default members who may no longer be on the rota come back as warnings.",
+        "operationId": "Shifts_CloneTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateCloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateCloneResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/shifts/mine": {
       "get": {
         "tags": [
@@ -370,7 +724,7 @@
         "tags": [
           "Shifts"
         ],
-        "summary": "Plans a shift with its rota (exactly one Manager). Its unit: unitId (a cached Organization unit), or the unit its section moved to; a section that has not moved yet may plan shifts without a unit. Nothing is granted until it is published.",
+        "summary": "Plans a shift with its rota: role keys that hold for the unit (GET /roles/effective), at most one person in a lead role (exactly one to publish), and for a shift of a unit only members of the unit or a unit above it. Needs shifts.manage on the unit (tenant-wide for a shift with no unit). Its unit: unitId (a cached Organization unit), or the unit its section moved to; a section that has not moved yet may plan shifts without a unit. Nothing is granted until it is published.",
         "operationId": "Shifts_AddShift",
         "requestBody": {
           "content": {
@@ -658,25 +1012,138 @@
           }
         }
       },
+      "RoleDefinitionDto": {
+        "required": [
+          "id",
+          "key",
+          "nameEn",
+          "nameAr",
+          "permissions",
+          "isLead",
+          "unitId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "key": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isLead": {
+            "type": "boolean"
+          },
+          "unitId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "RoleRequest": {
+        "required": [
+          "key",
+          "nameEn",
+          "nameAr",
+          "permissions",
+          "isLead"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isLead": {
+            "type": "boolean"
+          },
+          "unitId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "RoleUpdateRequest": {
+        "required": [
+          "nameEn",
+          "nameAr",
+          "permissions",
+          "isLead"
+        ],
+        "type": "object",
+        "properties": {
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isLead": {
+            "type": "boolean"
+          }
+        }
+      },
       "RotaEntry": {
         "required": [
           "userId",
-          "role"
+          "roleKey"
         ],
         "type": "object",
         "properties": {
           "userId": {
             "type": "string"
           },
-          "role": {
-            "$ref": "#/components/schemas/ShiftRole"
+          "roleKey": {
+            "type": "string"
           }
         }
       },
       "RotaMemberDto": {
         "required": [
           "userId",
-          "role",
+          "roleKey",
+          "isLead",
           "checkedOutAt",
           "accessEnds"
         ],
@@ -685,8 +1152,11 @@
           "userId": {
             "type": "string"
           },
-          "role": {
-            "$ref": "#/components/schemas/ShiftRole"
+          "roleKey": {
+            "type": "string"
+          },
+          "isLead": {
+            "type": "boolean"
           },
           "checkedOutAt": {
             "type": [
@@ -1022,7 +1492,10 @@
             "format": "int32"
           },
           "sectionId": {
-            "type": "integer",
+            "type": [
+              "null",
+              "integer"
+            ],
             "format": "int32"
           },
           "startsAt": {
@@ -1072,7 +1545,10 @@
             "format": "int32"
           },
           "sectionId": {
-            "type": "integer",
+            "type": [
+              "null",
+              "integer"
+            ],
             "format": "int32"
           },
           "section": {
@@ -1165,13 +1641,157 @@
           }
         }
       },
-      "ShiftRole": {
-        "enum": [
-          "Manager",
-          "Desk",
-          "Editor"
+      "ShiftTemplateDto": {
+        "required": [
+          "id",
+          "unitId",
+          "name",
+          "startLocal",
+          "duration",
+          "slots",
+          "defaultMembers"
         ],
-        "type": "string"
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startLocal": {
+            "type": "string",
+            "format": "time"
+          },
+          "duration": {
+            "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+            "type": "string"
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateSlotDto"
+            }
+          },
+          "defaultMembers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateMemberDto"
+            }
+          }
+        }
+      },
+      "TemplateCloneRequest": {
+        "required": [
+          "date"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "TemplateCloneResult": {
+        "required": [
+          "shift",
+          "warnings"
+        ],
+        "type": "object",
+        "properties": {
+          "shift": {
+            "$ref": "#/components/schemas/ShiftDto"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TemplateMemberDto": {
+        "required": [
+          "userId",
+          "roleKey"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "roleKey": {
+            "type": "string"
+          }
+        }
+      },
+      "TemplateRequest": {
+        "required": [
+          "unitId",
+          "name",
+          "startLocal",
+          "duration",
+          "slots",
+          "defaultMembers"
+        ],
+        "type": "object",
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startLocal": {
+            "type": "string",
+            "format": "time"
+          },
+          "duration": {
+            "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+            "type": "string"
+          },
+          "slots": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TemplateSlotDto"
+            }
+          },
+          "defaultMembers": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TemplateMemberDto"
+            }
+          }
+        }
+      },
+      "TemplateSlotDto": {
+        "required": [
+          "roleKey",
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "roleKey": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "UnitDto": {
         "required": [

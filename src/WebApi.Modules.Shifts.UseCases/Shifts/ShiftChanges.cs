@@ -20,8 +20,12 @@ public sealed class ShiftChanges(IRepository<Shift> shifts, IReadRepository<Sect
         if (!changed.IsSuccess) return changed.As<ShiftDto>();
 
         await shifts.UpdateAsync(shift, ct);
-        var section = await sections.FirstOrDefaultAsync(new SectionByIdSpec(shift.SectionId), ct);
-        if (section is null) return SectionDto.NotFound<ShiftDto>(shift.SectionId);
+        Section? section = null;
+        if (shift.SectionId is { } sectionId)
+        {
+            section = await sections.FirstOrDefaultAsync(new SectionByIdSpec(sectionId), ct);
+            if (section is null) return SectionDto.NotFound<ShiftDto>(sectionId);
+        }
         await grants.WriteAsync(shift, section, ct);
         return (await details.ToDtosAsync([shift], ct))[0];
     }

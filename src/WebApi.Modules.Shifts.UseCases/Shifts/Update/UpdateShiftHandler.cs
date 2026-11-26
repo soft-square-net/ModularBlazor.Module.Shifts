@@ -1,22 +1,46 @@
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Authority;
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Roles;
+
 namespace soft.square.net.WebApi.Modules.Shifts.UseCases.Shifts.Update;
 
-public sealed class UpdateShiftHandler(ShiftChanges changes, ShiftUnits units) : ICommandHandler<UpdateShiftCommand, Result<ShiftDto>>
+public sealed class UpdateShiftHandler(ShiftChanges changes, ShiftUnits units, ShiftRota rota, ShiftAuthority authority)
+    : ICommandHandler<UpdateShiftCommand, Result<ShiftDto>>
 {
     public async ValueTask<Result<ShiftDto>> Handle(UpdateShiftCommand command, CancellationToken ct) =>
         await changes.ChangeAsync(command.Id, async shift =>
         {
+            var allowed = await authority.RequireManageAsync(shift.UnitId, ct);
+            if (!allowed.IsSuccess) return allowed;
             if (shift.SectionId != command.SectionId)
                 return Result.Conflict("A shift cannot move to another section; delete it and plan a new one.");
             if (command.UnitId is { } unitId && shift.UnitId is { } current && current != unitId)
                 return Result.Conflict("A shift cannot move to another unit; delete it and plan a new one.");
+
+            var unit = shift.UnitId;
             if (command.UnitId is not null && shift.UnitId is null)
             {
-                var unit = await units.ResolveAsync(shift.SectionId, command.UnitId, ct);
-                if (!unit.IsSuccess) return Result.Invalid([.. unit.ValidationErrors]); // ShiftUnits only refuses as Invalid
-                if (unit.Value is { } resolved) shift.MoveToUnit(resolved);
+                var resolved = await units.ResolveAsync(command.SectionId, command.UnitId, ct);
+                if (!resolved.IsSuccess) return Result.Invalid([.. resolved.ValidationErrors]); // ShiftUnits only refuses as Invalid
+                unit = resolved.Value;
+                if (unit is not null)
+                {
+                    allowed = await authority.RequireManageAsync(unit, ct);
+                    if (!allowed.IsSuccess) return allowed;
+                }
             }
+            var assignments = await rota.ResolveAsync(unit, command.Rota, command.StartsAt, ct);
+            if (!assignments.IsSuccess) return Failed(assignments);
+
+            if (unit is { } moved && shift.UnitId is null) shift.MoveToUnit(moved);
             shift.Reschedule(command.StartsAt, command.EndsAt);
-            shift.SetRota(command.Rota.Select(r => (r.UserId, r.Role)));
+            shift.SetRota(assignments.Value);
             return Result.Success();
         }, ct);
+
+    private static Result Failed<T>(Result<T> failure) => failure.Status switch
+    {
+        ResultStatus.Invalid => Result.Invalid([.. failure.ValidationErrors]),
+        ResultStatus.Unavailable => Result.Unavailable([.. failure.Errors]),
+        _ => Result.Error(new ErrorList([.. failure.Errors]))
+    };
 }

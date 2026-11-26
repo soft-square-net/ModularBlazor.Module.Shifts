@@ -20,7 +20,7 @@ public sealed class EfRepositoryShifts : IDisposable
         await using var context = _database.For(tenant);
         var section = await new EfRepository<Section>(context).AddAsync(Section.Create("Politics desk", ["politics", "economy"], 3, null), Ct);
         var shift = Shift.Create(section.Id, startsAt ?? Start, (startsAt ?? Start).AddHours(8),
-            [("manager-1", ShiftRole.Manager), ("desk-1", ShiftRole.Desk), ("desk-1", ShiftRole.Editor)]);
+            [new("manager-1", "manager", true), new("desk-1", "desk", false), new("desk-1", "editor", false)]);
         await new EfRepository<Shift>(context).AddAsync(shift, Ct);
         return (section, shift);
     }
@@ -40,7 +40,7 @@ public sealed class EfRepositoryShifts : IDisposable
     }
 
     [Fact]
-    public async Task StoresAShiftWithItsRotaAndRolesByName()
+    public async Task StoresAShiftWithItsRotaRoleKeysAndLead()
     {
         var (_, saved) = await SeedAsync();
 
@@ -49,8 +49,8 @@ public sealed class EfRepositoryShifts : IDisposable
 
         shift.ShouldNotBeNull();
         shift.GrantSource.ShouldBe($"shift:{saved.Id}");
-        shift.Members.Select(m => (m.UserId, m.Role)).ShouldBe(
-            [("manager-1", ShiftRole.Manager), ("desk-1", ShiftRole.Desk), ("desk-1", ShiftRole.Editor)], ignoreOrder: true);
+        shift.Members.Select(m => (m.UserId, m.RoleKey, m.IsLead)).ShouldBe(
+            [("manager-1", "manager", true), ("desk-1", "desk", false), ("desk-1", "editor", false)], ignoreOrder: true);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class EfRepositoryShifts : IDisposable
         {
             var shifts = new EfRepository<Shift>(context);
             var shift = await shifts.FirstOrDefaultAsync(new ShiftByIdSpec(saved.Id), Ct);
-            shift!.SetRota([("manager-1", ShiftRole.Manager), ("editor-2", ShiftRole.Editor)]);
+            shift!.SetRota([new("manager-1", "manager", true), new("editor-2", "editor", false)]);
             shift.CheckOutMember("editor-2", Start.AddHours(2));
             await shifts.UpdateAsync(shift, Ct);
         }

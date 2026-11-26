@@ -1,6 +1,8 @@
 using Carter;
+using Roles = soft.square.net.WebApi.Modules.Shifts.Web.Roles;
 using Sections = soft.square.net.WebApi.Modules.Shifts.Web.Sections;
 using Shifts = soft.square.net.WebApi.Modules.Shifts.Web.Shifts;
+using Templates = soft.square.net.WebApi.Modules.Shifts.Web.Templates;
 using Units = soft.square.net.WebApi.Modules.Shifts.Web.Units;
 
 namespace soft.square.net.WebApi.Modules.Shifts.Web;
@@ -26,6 +28,19 @@ public sealed class ShiftsRoutes : ICarterModule
 
         Units.List.Map(shifts);
         Units.Resync.Map(shifts);
+
+        Roles.List.Map(shifts);
+        Roles.ListEffective.Map(shifts);
+        Roles.Add.Map(shifts);
+        Roles.Update.Map(shifts);
+        Roles.Delete.Map(shifts);
+
+        Templates.List.Map(shifts);
+        Templates.GetById.Map(shifts);
+        Templates.Add.Map(shifts);
+        Templates.Update.Map(shifts);
+        Templates.Delete.Map(shifts);
+        Templates.Clone.Map(shifts);
 
         Shifts.ListMine.Map(shifts);
         Shifts.ListOverdue.Map(shifts);

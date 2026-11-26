@@ -1,6 +1,6 @@
 # ModularBlazor.Module.Shifts
 
-Shifts: newsroom sections, the rota (Manager, Desk, Editor) and check-out; the rota becomes time-windowed grants. It is a module of the [ModularBlazor](https://github.com/soft-square-net/ModularBlazor.Platform) platform, released on its own as the bundle `shifts`.
+Shifts: newsroom sections and units, the rota (roles defined per tenant or unit), shift templates and check-out; the rota becomes time-windowed grants. It is a module of the [ModularBlazor](https://github.com/soft-square-net/ModularBlazor.Platform) platform, released on its own as the bundle `shifts`.
 
 > **Status: moved in.** The code moved here from the platform repo and builds against the platform packages.
 > Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
@@ -12,7 +12,7 @@ runtime module: see [docs/clean-architecture.md](docs/clean-architecture.md) for
 the rota becomes grants, and where a new feature goes.
 
 ```
-src/WebApi.Modules.Shifts.Core/             Core: aggregates (SectionAggregate, ShiftAggregate, UnitAggregate), domain rules, specifications
+src/WebApi.Modules.Shifts.Core/             Core: aggregates (SectionAggregate, ShiftAggregate, UnitAggregate, RoleAggregate, TemplateAggregate), domain rules, specifications
 src/WebApi.Modules.Shifts.UseCases/         use cases: one folder each, a Mediator command or query and its handler, returning an Ardalis Result
 src/WebApi.Modules.Shifts.Infrastructure/   data: ShiftsDbContext, entity configurations, tenant migrations per database provider; HTTP access to Organization
 src/WebApi.Modules.Shifts.Web/              entry assembly: IRuntimeModule, the Carter route table, one REPR endpoint class per route
@@ -191,6 +191,73 @@ A shift whose unit is not cached keeps its section's scopes only.
 - **After the move**, the section endpoints are read-only: adding or changing a section answers 409. The sections are
   removed in S4.
 
+## Roles, templates and unit authority (Shifts v2, step S2)
+
+### Role definitions
+
+The rota's roles are rows now (`shift_roles`), not an enum: `ShiftRoleDefinition` has a `key` (a slug: lowercase
+letters, digits and dashes), `nameEn`, `nameAr`, `permissions`, `isLead` and `unitId` (null: tenant-wide).
+
+- **Which definition holds.** For each key, the definition of the nearest unit up the shift's unit path wins, else the
+  tenant-wide one. A shift with no unit (or whose unit is not cached) sees the tenant-wide definitions only. A unit can
+  add roles of its own (`photo-editor` for one Department) or override a tenant role (Sport's own `desk`).
+- **Seeding.** A tenant with no definitions at all gets `manager` (lead), `desk` and `editor`, with the permissions the
+  old roles had (`ShiftRolesInitializer`, on every module load; an empty table only).
+- **The rota** sends `roleKey` per member. The old names still work (`Manager` is read as `manager`). The member keeps
+  the role's lead flag (`isLead`): a Draft may have no lead, there is never more than one, and publishing (and every
+  change to a published shift) needs exactly one.
+- **Permissions** must be in the platform's permission catalog (any installed module's, or the platform's own); else 400.
+- **Changes.** A permissions change rewrites the grants of the published shifts that have not ended and use the
+  definition. The lead flag cannot change while such shifts or templates use it (409). A definition in use is deleted
+  only when another of the same key and lead flag takes over (a parent unit's, or the tenant's), else 409.
+- **Migration.** `RolesAndTemplates` turns each rota row's `Role` into `RoleKey` (`LOWER(Role)`) and `IsLead`
+  (`Role = 'Manager'`). Its Down restores the names and deletes the shifts that have no section.
+
+| Endpoint | Permission | What it does |
+| --- | --- | --- |
+| `GET /api/shifts/roles` | `shifts.view` or `shifts.manage` | every definition of the tenant |
+| `GET /api/shifts/roles/effective?unitId=` | `shifts.view` or `shifts.manage` | the definitions that hold for a unit (none: tenant-wide); for the rota editor |
+| `POST /api/shifts/roles` | `shifts.manage` on the unit (tenant-wide for a tenant role) | add one; a key is unique per unit (409) |
+| `PUT /api/shifts/roles/{id}` | as above, on the definition's unit | names, permissions, lead flag |
+| `DELETE /api/shifts/roles/{id}` | as above | remove one |
+
+### Templates
+
+`ShiftTemplate` (`shift_templates`) is a unit's recurring shift: `name`, `startLocal` (a wall-clock time), `duration`
+(elapsed time, at most 24 hours), `slots` (role key and count, one per role) and `defaultMembers` (user and role key).
+Its roles must hold for the unit and its default members must be members of it (see below), when it is saved.
+
+`POST /api/shifts/templates/{id}/clone` `{ "date": "2026-03-29" }` makes a **Draft** shift on that date, returned with
+`warnings`:
+
+- **Time zone.** The start is `date` + `startLocal` in the unit's time zone (else the nearest unit above it that has one,
+  else UTC, with a warning); the end is the start plus `duration`, so a night across a DST change lasts its duration
+  and ends an hour earlier or later on the clock. A start the clocks skip moves forward by the gap (02:30 on the day
+  the clocks go forward is 03:30); a start the clocks pass twice is the first one.
+- **Rota.** The default members whose role still holds and who are still members on that day, with one lead at most;
+  everyone left out is a warning, and so is every slot that is not filled and a shift with no lead.
+- **Section.** The section mapped to the unit, if any; else the shift has a unit and no section (`sectionId` null).
+
+| Endpoint | Permission |
+| --- | --- |
+| `GET /api/shifts/templates?unitId=`, `GET /api/shifts/templates/{id}` | `shifts.view` or `shifts.manage` |
+| `POST /api/shifts/templates`, `PUT …/{id}`, `DELETE …/{id}`, `POST …/{id}/clone` | `shifts.manage` on the template's unit |
+
+### Who may plan a unit's shifts
+
+- **Authority.** `shifts.manage` is checked on the unit's scopes, `UnitScopes.For(path)`: a grant on a Department covers
+  its Sections. Adding, changing, publishing, checking out and deleting a unit's shift all check it. A shift with no
+  unit, sections, the move to Organization and the units resync need `shifts.manage` tenant-wide. A service client that
+  checks shifts out (the workflow) needs it tenant-wide too.
+- **Rota members (D6).** Everyone on a unit's rota must be a member of the unit or of a unit above it (Organization's
+  `MembersOf`, read with the caller's token) at the shift's start, with an identity (`subject`, matched against the
+  rota's user id). Without Organization configured, or when it does not answer, the change is refused with 503. A
+  shift with no unit skips the check.
+- **Grants** are written when they were (on publish, and on every change to a published shift), with the permissions
+  of the role definitions.
+
+The Blazor client still plans shifts by section; its role picker lists the definitions that hold (the new pages are S4).
+
 ## Developing
 
 `playground/` is a small Aspire AppHost: PostgreSQL, the identity service, one WebApi and the Blazor client, with this
@@ -227,6 +294,9 @@ and send the header `X-Tenant: acme`.
 | --- | --- |
 | `acme-admin@modular.local` | `shifts.*`: sections, planning, publishing, checking any shift out |
 | `editor@modular.local` | `shifts.view`: sees sections and shifts; checks themselves out of a shift they are on |
+
+Planning a unit's shift needs Organization (`Shifts:Organization:BaseUrl`) for the rota check: without it, add the
+shift without a unit.
 
 A published shift writes `content.*` grants (accept, assign, review, publish, ...) for its rota on the section's
 categories (on the section itself for a department), valid only while it runs; they matter once the Content module is installed next to this one.

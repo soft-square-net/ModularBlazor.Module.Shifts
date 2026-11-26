@@ -1,4 +1,5 @@
 using soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate;
+using static soft.square.net.WebApi.Modules.Shifts.UnitTests.Core.ShiftAggregate.ShiftBuilder;
 
 namespace soft.square.net.WebApi.Modules.Shifts.UnitTests.Core.ShiftAggregate;
 
@@ -7,25 +8,40 @@ public class ShiftRules
     private static readonly DateTimeOffset Start = TestClock.Start;
 
     [Fact]
-    public void NeedsExactlyOneManager()
+    public void HasAtMostOneLeadAndExactlyOneToPublish()
     {
-        Should.Throw<DomainException>(() => Shift.Create(1, Start, Start.AddHours(8), [("a", ShiftRole.Desk)]));
-        Should.Throw<DomainException>(() => Shift.Create(1, Start, Start.AddHours(8), [("a", ShiftRole.Manager), ("b", ShiftRole.Manager)]));
+        Should.Throw<DomainException>(() => Shift.Create(1, Start, Start.AddHours(8), [Lead("a"), Lead("b")]));
+
+        var draft = Shift.Create(1, Start, Start.AddHours(8), [As("a", "desk")]); // a draft may wait for its lead
+        Should.Throw<DomainException>(draft.Publish);
+        draft.Published.ShouldBeFalse();
+
+        draft.SetRota([Lead("b"), As("a", "desk")]);
+        draft.Publish();
+        Should.Throw<DomainException>(() => draft.SetRota([As("a", "desk")])); // a published shift keeps one lead
+        draft.IsLead("b").ShouldBeTrue();
+    }
+
+    [Fact]
+    public void BelongsToAUnitOrASection()
+    {
+        Should.Throw<DomainException>(() => Shift.Create(null, Start, Start.AddHours(8), [Lead("a")]));
+        Shift.Create(null, Start, Start.AddHours(8), [Lead("a")], Guid.NewGuid()).SectionId.ShouldBeNull();
     }
 
     [Fact]
     public void EndsAfterItStartsAndLastsAtMostADay()
     {
-        Should.Throw<DomainException>(() => Shift.Create(1, Start, Start, [("a", ShiftRole.Manager)]));
-        Should.Throw<DomainException>(() => Shift.Create(1, Start, Start.AddHours(25), [("a", ShiftRole.Manager)]));
+        Should.Throw<DomainException>(() => Shift.Create(1, Start, Start, [Lead("a")]));
+        Should.Throw<DomainException>(() => Shift.Create(1, Start, Start.AddHours(25), [Lead("a")]));
     }
 
     [Fact]
     public void APersonMayHoldSeveralRoles()
     {
-        var shift = Shift.Create(1, Start, Start.AddHours(8), [("a", ShiftRole.Manager), ("a", ShiftRole.Desk), ("a", ShiftRole.Desk)]);
+        var shift = Shift.Create(1, Start, Start.AddHours(8), [Lead("a"), As("a", "desk"), As("a", "desk")]);
 
-        shift.Members.Select(m => m.Role).ShouldBe([ShiftRole.Manager, ShiftRole.Desk]);
+        shift.Members.Select(m => (m.RoleKey, m.IsLead)).ShouldBe([("manager", true), ("desk", false)]);
     }
 
     [Fact]
@@ -81,6 +97,6 @@ public class ShiftRules
         Should.Throw<DomainException>(() => shift.CheckOutMember(ShiftBuilder.Desk, Start.AddMinutes(-5)));
         shift.CheckOut(ShiftBuilder.Manager, Start.AddHours(1));
         Should.Throw<DomainException>(() => shift.CheckOut(ShiftBuilder.Manager, Start.AddHours(2)));
-        Should.Throw<DomainException>(() => shift.SetRota([("x", ShiftRole.Manager)]));
+        Should.Throw<DomainException>(() => shift.SetRota([Lead("x")]));
     }
 }

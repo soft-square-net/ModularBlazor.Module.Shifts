@@ -18,7 +18,8 @@ public static class InfrastructureServiceExtensions
     /// <item>integration events: the outbox (<c>shifts.*</c>) and the inbox with the <c>org.*</c> handler
     /// (<see cref="OrgEventsHandler.Patterns"/>, also in the manifest's Subscriptions);</item>
     /// <item>the unit cache's store, the HTTP access to Organization (settings <c>Shifts:Organization</c>) and the cache's
-    /// first fill per tenant, registered after the migrations so it runs on a migrated database.</item>
+    /// first fill per tenant, registered after the migrations so it runs on a migrated database;</item>
+    /// <item>the default role definitions, seeded per tenant (also after the migrations).</item>
     /// </list>
     /// </summary>
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services)
@@ -31,6 +32,7 @@ public static class InfrastructureServiceExtensions
         services.AddSingleton<OrganizationHttp>();
         services.AddScoped<IOrganizationAccess, OrganizationAccess>();
         services.AddSingleton<ITenantInitializer, UnitCacheInitializer>();
+        services.AddSingleton<ITenantInitializer, ShiftRolesInitializer>();
         return services;
     }
 }

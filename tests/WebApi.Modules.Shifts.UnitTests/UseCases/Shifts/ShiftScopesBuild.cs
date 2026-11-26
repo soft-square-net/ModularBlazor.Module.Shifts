@@ -55,7 +55,7 @@ public class ShiftScopesBuild
         await fixture.Units.ApplyAsync(State(DepartmentUnit()), Ct);
         await fixture.Units.ApplyAsync(State(SportUnit(1, "Sport", "football")), Ct);
         await fixture.Units.ApplyAsync(State(SeoUnit()), Ct);
-        var shift = Shift.Create(1, fixture.Clock.Now.AddHours(1), fixture.Clock.Now.AddHours(9), [(ShiftBuilder.Manager, ShiftRole.Manager)], Department);
+        var shift = Shift.Create(1, fixture.Clock.Now.AddHours(1), fixture.Clock.Now.AddHours(9), [ShiftBuilder.Lead(ShiftBuilder.Manager)], Department);
         shift.Publish();
 
         await fixture.ShiftGrants.WriteAsync(shift, fixture.Section, Ct);
@@ -69,7 +69,7 @@ public class ShiftScopesBuild
     public async Task AShiftWhoseUnitIsNotCachedKeepsItsSectionsScopes()
     {
         var fixture = new ShiftsFixture("admin-1");
-        var shift = Shift.Create(1, fixture.Clock.Now.AddHours(1), fixture.Clock.Now.AddHours(9), [(ShiftBuilder.Manager, ShiftRole.Manager)], Sport);
+        var shift = Shift.Create(1, fixture.Clock.Now.AddHours(1), fixture.Clock.Now.AddHours(9), [ShiftBuilder.Lead(ShiftBuilder.Manager)], Sport);
         shift.Publish();
 
         await fixture.ShiftGrants.WriteAsync(shift, fixture.Section, Ct);

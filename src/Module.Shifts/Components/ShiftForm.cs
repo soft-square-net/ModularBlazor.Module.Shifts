@@ -21,7 +21,8 @@ public sealed class ShiftForm
     public sealed class RotaRow
     {
         public string UserId { get; set; } = "";
-        public ShiftRole Role { get; set; } = ShiftRole.Desk;
+        /// <summary>The key of a role definition that holds for the shift's unit (GET /roles/effective).</summary>
+        public string RoleKey { get; set; } = "desk";
     }
 
     /// <summary>A new shift: the next full hour for eight hours, in the only section if there is one.</summary>
@@ -33,16 +34,16 @@ public sealed class ShiftForm
             SectionId = sections.Count == 1 ? sections[0].Id.ToString(CultureInfo.InvariantCulture) : "",
             StartsAt = Format(start),
             EndsAt = Format(start.AddHours(8)),
-            Rota = me is null ? [] : [new RotaRow { UserId = me, Role = ShiftRole.Manager }],
+            Rota = me is null ? [] : [new RotaRow { UserId = me, RoleKey = "manager" }],
         };
     }
 
     public static ShiftForm From(ShiftDto shift) => new()
     {
-        SectionId = shift.SectionId.ToString(CultureInfo.InvariantCulture),
+        SectionId = shift.SectionId?.ToString(CultureInfo.InvariantCulture) ?? "",
         StartsAt = Format(shift.StartsAt.ToLocalTime().DateTime),
         EndsAt = Format(shift.EndsAt.ToLocalTime().DateTime),
-        Rota = shift.Rota.Select(m => new RotaRow { UserId = m.UserId, Role = m.Role }).ToList(),
+        Rota = shift.Rota.Select(m => new RotaRow { UserId = m.UserId, RoleKey = m.RoleKey }).ToList(),
     };
 
     /// <summary>The request, or why the form cannot become one.</summary>
@@ -56,7 +57,7 @@ public sealed class ShiftForm
             StartsAt = Parse(StartsAt, "start"),
             EndsAt = Parse(EndsAt, "end"),
             Rota = Rota.Where(r => !string.IsNullOrWhiteSpace(r.UserId))
-                .Select(r => new RotaEntry { UserId = r.UserId.Trim(), Role = r.Role }).ToList(),
+                .Select(r => new RotaEntry { UserId = r.UserId.Trim(), RoleKey = r.RoleKey }).ToList(),
         };
     }
 
