@@ -13,6 +13,11 @@ public sealed class Shift : AggregateRoot<int>, ITenantOwned
 
     public string TenantId { get; set; } = "";
     public int SectionId { get; private set; }
+    /// <summary>
+    /// The Organization unit the shift belongs to (a cached unit). Set for every new shift, and for the existing ones
+    /// when their section moves to Organization; it replaces <see cref="SectionId"/> once the move is done.
+    /// </summary>
+    public Guid? UnitId { get; private set; }
     public DateTimeOffset StartsAt { get; private set; }
     public DateTimeOffset EndsAt { get; private set; }
     public bool Published { get; private set; }
@@ -24,9 +29,11 @@ public sealed class Shift : AggregateRoot<int>, ITenantOwned
     /// <summary>The grant source of this shift's rota.</summary>
     public string GrantSource => $"shift:{Id}";
 
-    public static Shift Create(int sectionId, DateTimeOffset startsAt, DateTimeOffset endsAt, IEnumerable<(string UserId, ShiftRole Role)> rota)
+    public static Shift Create(int sectionId, DateTimeOffset startsAt, DateTimeOffset endsAt, IEnumerable<(string UserId, ShiftRole Role)> rota,
+        Guid? unitId = null)
     {
-        var shift = new Shift { SectionId = sectionId };
+        if (unitId == Guid.Empty) throw new DomainException("A shift's unit cannot be empty.");
+        var shift = new Shift { SectionId = sectionId, UnitId = unitId };
         shift.Reschedule(startsAt, endsAt);
         shift.SetRota(rota);
         return shift;
@@ -52,6 +59,13 @@ public sealed class Shift : AggregateRoot<int>, ITenantOwned
         _members.RemoveAll(m => !entries.Contains((m.UserId, m.Role)));
         foreach (var entry in entries.Where(e => !_members.Any(m => m.UserId == e.UserId && m.Role == e.Role)))
             _members.Add(new ShiftMember(entry.UserId, entry.Role));
+    }
+
+    /// <summary>The shift's section moved to Organization: the shift now belongs to the section's unit.</summary>
+    public void MoveToUnit(Guid unitId)
+    {
+        if (unitId == Guid.Empty) throw new DomainException("A shift's unit cannot be empty.");
+        UnitId = unitId;
     }
 
     public void Publish() => Published = true;

@@ -12,4 +12,8 @@ public sealed record SectionDto(int Id, string Name, SectionKind Kind, IReadOnly
         new(s.Id, s.Name, s.Kind, s.Categories.Select(c => c.CategoryId).ToArray(), s.AutoAssignDelayMinutes, s.CheckoutGraceMinutes);
 
     public static Result<T> NotFound<T>(int id) => Result<T>.NotFound($"Section {id} was not found.");
+
+    /// <summary>Why a section cannot change once the tenant's sections moved to Organization.</summary>
+    public const string MovedToOrganization =
+        "The sections moved to Organization and are read-only here: change the Section units in Organization instead.";
 }

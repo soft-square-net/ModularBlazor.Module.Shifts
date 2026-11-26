@@ -12,6 +12,7 @@ public sealed class ShiftConfiguration : IEntityTypeConfiguration<Shift>
         shift.Property(s => s.CheckedOutBy).HasMaxLength(DataSchemaConstants.UserIdLength);
         shift.Ignore(s => s.GrantSource);
         shift.HasIndex(s => new { s.SectionId, s.StartsAt });
+        shift.HasIndex(s => new { s.UnitId, s.StartsAt });
         shift.HasMany(s => s.Members).WithOne().HasForeignKey("ShiftId").OnDelete(DeleteBehavior.Cascade);
         shift.Navigation(s => s.Members).UsePropertyAccessMode(PropertyAccessMode.Field);
     }

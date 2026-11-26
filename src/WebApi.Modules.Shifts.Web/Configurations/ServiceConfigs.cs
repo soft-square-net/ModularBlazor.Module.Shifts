@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using soft.square.net.WebApi.Modules.Shifts.Infrastructure;
+using soft.square.net.WebApi.Modules.Shifts.Infrastructure.Organization;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Shifts;
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Units;
 
 namespace soft.square.net.WebApi.Modules.Shifts.Web.Configurations;
 
@@ -14,13 +16,19 @@ public static class ServiceConfigs
     public static IServiceCollection AddServiceConfigs(this IServiceCollection services, IConfiguration settings)
     {
         services.Configure<ShiftOptions>(settings.GetSection("Shifts"));
+        services.Configure<OrganizationOptions>(settings.GetSection("Shifts:Organization"));
+        services.AddHttpContextAccessor();
         services.AddInfrastructureServices();
+
+        // The unit cache (Organization's units, as this module follows them).
+        services.AddScoped<UnitCache>();
 
         // Shared by the use cases.
         services.AddScoped<ShiftCaller>();
         services.AddScoped<ShiftGrants>();
         services.AddScoped<ShiftDetails>();
         services.AddScoped<ShiftChanges>();
+        services.AddScoped<ShiftUnits>();
 
         services.AddMediatorSourceGen();
         return services;

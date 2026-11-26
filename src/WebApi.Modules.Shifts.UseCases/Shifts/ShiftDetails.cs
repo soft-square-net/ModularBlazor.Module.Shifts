@@ -29,7 +29,8 @@ public sealed class ShiftDetails(IReadRepository<Shift> shifts, IReadRepository<
             return new ShiftDto(shift.Id, shift.SectionId, section?.Name ?? "?", section?.Categories.Select(c => c.CategoryId).ToArray() ?? [],
                 shift.StartsAt, shift.EndsAt, shift.Published, shift.IsRunning(now), shift.CheckedOutAt, shift.CheckedOutBy, shift.GrantSource,
                 shift.Members.OrderBy(m => m.Role).ThenBy(m => m.UserId)
-                    .Select(m => new RotaMemberDto(m.UserId, m.Role, m.CheckedOutAt, shift.EndOf(m))).ToArray());
+                    .Select(m => new RotaMemberDto(m.UserId, m.Role, m.CheckedOutAt, shift.EndOf(m))).ToArray(),
+                shift.UnitId);
         }).ToArray();
     }
 }

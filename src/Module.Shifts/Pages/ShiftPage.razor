@@ -126,7 +126,7 @@
 </div>
 
 @code {
-  [Inject] private IStringLocalizer<ShiftEditor> L { get; set; } = default!;
+  [Inject] private new IStringLocalizer<ShiftEditor> L { get; set; } = default!; // this page reads the editor's texts
 
   [Parameter] public int Id { get; set; }
 

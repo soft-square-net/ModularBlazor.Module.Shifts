@@ -15,7 +15,7 @@ public class UpdateShiftHandlerHandle
         var shift = ShiftBuilder.Planned(_fixture.Clock.Now.AddHours(1));
         _fixture.Stored(shift);
 
-        var result = await new UpdateShiftHandler(_fixture.Changes).Handle(
+        var result = await new UpdateShiftHandler(_fixture.Changes, _fixture.ShiftUnits).Handle(
             new UpdateShiftCommand(shift.Id, 2, shift.StartsAt, shift.EndsAt, [new RotaEntry("m", ShiftRole.Manager)]),
             TestContext.Current.CancellationToken);
 
@@ -29,7 +29,7 @@ public class UpdateShiftHandlerHandle
         var shift = ShiftBuilder.Published(_fixture.Clock.Now.AddHours(1));
         _fixture.Stored(shift);
 
-        var result = await new UpdateShiftHandler(_fixture.Changes).Handle(
+        var result = await new UpdateShiftHandler(_fixture.Changes, _fixture.ShiftUnits).Handle(
             new UpdateShiftCommand(shift.Id, shift.SectionId, shift.StartsAt, shift.EndsAt, [new RotaEntry("new-manager", ShiftRole.Manager)]),
             TestContext.Current.CancellationToken);
 
