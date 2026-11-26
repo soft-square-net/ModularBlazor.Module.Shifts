@@ -22,6 +22,70 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.O
 
             OracleModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("soft.square.net.WebApi.Data.Messaging.InboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("RAW(16)");
+
+                    b.Property<DateTimeOffset>("ProcessedAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("NVARCHAR2(100)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("NVARCHAR2(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProcessedAt");
+
+                    b.ToTable("shifts_integration_inbox", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Data.Messaging.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("RAW(16)");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("NUMBER(10)");
+
+                    b.Property<string>("Envelope")
+                        .IsRequired()
+                        .HasColumnType("NVARCHAR2(2000)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("NVARCHAR2(1000)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("NVARCHAR2(64)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("NVARCHAR2(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SentAt", "OccurredAt");
+
+                    b.ToTable("shifts_integration_outbox", (string)null);
+                });
+
             modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate.Section", b =>
                 {
                     b.Property<int>("Id")
@@ -85,6 +149,45 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.O
                     b.ToTable("shifts_section_categories", (string)null);
                 });
 
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate.SectionUnitMap", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("NUMBER(10)");
+
+                    OraclePropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("MovedAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<string>("MovedBy")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("NVARCHAR2(128)");
+
+                    b.Property<int>("SectionId")
+                        .HasColumnType("NUMBER(10)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("NVARCHAR2(64)");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("RAW(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SectionId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("UnitId");
+
+                    b.ToTable("shifts_section_unit_map", (string)null);
+                });
+
             modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate.Shift", b =>
                 {
                     b.Property<int>("Id")
@@ -117,11 +220,16 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.O
                         .HasMaxLength(64)
                         .HasColumnType("NVARCHAR2(64)");
 
+                    b.Property<Guid?>("UnitId")
+                        .HasColumnType("RAW(16)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId");
 
                     b.HasIndex("SectionId", "StartsAt");
+
+                    b.HasIndex("UnitId", "StartsAt");
 
                     b.ToTable("shifts_shifts", (string)null);
                 });
@@ -157,6 +265,71 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.O
                     b.HasIndex("UserId");
 
                     b.ToTable("shifts_shift_members", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.UnitAggregate.CachedUnit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("RAW(16)");
+
+                    b.Property<string>("Categories")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("NVARCHAR2(2000)");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("NVARCHAR2(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("NVARCHAR2(200)");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("RAW(16)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("RAW(16)");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("NVARCHAR2(1000)");
+
+                    b.Property<bool>("Removed")
+                        .HasColumnType("BOOLEAN");
+
+                    b.Property<string>("Tags")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("NVARCHAR2(2000)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("NVARCHAR2(64)");
+
+                    b.Property<string>("TimeZone")
+                        .HasMaxLength(64)
+                        .HasColumnType("NVARCHAR2(64)");
+
+                    b.Property<string>("TypeKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("NVARCHAR2(64)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("NUMBER(10)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("shifts_unit_cache", (string)null);
                 });
 
             modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate.SectionCategory", b =>

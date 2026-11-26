@@ -1,6 +1,7 @@
 using Carter;
 using Sections = soft.square.net.WebApi.Modules.Shifts.Web.Sections;
 using Shifts = soft.square.net.WebApi.Modules.Shifts.Web.Shifts;
+using Units = soft.square.net.WebApi.Modules.Shifts.Web.Units;
 
 namespace soft.square.net.WebApi.Modules.Shifts.Web;
 
@@ -20,6 +21,11 @@ public sealed class ShiftsRoutes : ICarterModule
         Sections.Add.Map(shifts);
         Sections.Update.Map(shifts);
         Sections.GetSettings.Map(shifts);
+        Sections.Export.Map(shifts);
+        Sections.MoveToOrganization.Map(shifts);
+
+        Units.List.Map(shifts);
+        Units.Resync.Map(shifts);
 
         Shifts.ListMine.Map(shifts);
         Shifts.ListOverdue.Map(shifts);

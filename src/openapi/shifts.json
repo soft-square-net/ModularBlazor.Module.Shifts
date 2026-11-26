@@ -37,6 +37,7 @@
         "tags": [
           "Shifts"
         ],
+        "summary": "Adds a section. 409 once the sections moved to Organization (read-only: add Section units there).",
         "operationId": "Shifts_AddSection",
         "requestBody": {
           "content": {
@@ -101,7 +102,7 @@
         "tags": [
           "Shifts"
         ],
-        "summary": "Changing the categories or the kind rewrites the grants of the section's published shifts that have not ended.",
+        "summary": "Changing the categories or the kind rewrites the grants of the section's published shifts that have not ended. 409 once the sections moved to Organization (read-only).",
         "operationId": "Shifts_UpdateSection",
         "parameters": [
           {
@@ -165,6 +166,103 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SectionSettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shifts/sections/export": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "Every section with the Section unit to create for it in Organization and the unit it moved to, if any. Create the units, then link them with POST /sections/move-to-organization (links).",
+        "operationId": "Shifts_ExportSections",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionsExport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shifts/sections/move-to-organization": {
+      "post": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "Creates a Section unit under the Department parentUnitId for each section (with the caller's token; a department section gets the tag 'department' and the category '*'), or links the units given in links. Maps the section, moves its shifts to the unit and publishes shifts.section-moved.v1. Idempotent; one result per section. The sections are read-only afterwards.",
+        "operationId": "Shifts_MoveSectionsToOrganization",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveSectionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionMoveReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shifts/units": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "The tenant's Organization units as this module caches them (from org events and the unit directory), by path.",
+        "operationId": "Shifts_ListUnits",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UnitDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shifts/units/resync": {
+      "post": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "Reads the tenant's units from Organization's local directory (with the caller's token) and replaces the cache: newer versions are applied, units no longer listed are dropped.",
+        "operationId": "Shifts_ResyncUnits",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitResyncResult"
                 }
               }
             }
@@ -272,7 +370,7 @@
         "tags": [
           "Shifts"
         ],
-        "summary": "Plans a shift with its rota (exactly one Manager). Nothing is granted until it is published.",
+        "summary": "Plans a shift with its rota (exactly one Manager). Its unit: unitId (a cached Organization unit), or the unit its section moved to; a section that has not moved yet may plan shifts without a unit. Nothing is granted until it is published.",
         "operationId": "Shifts_AddShift",
         "requestBody": {
           "content": {
@@ -536,6 +634,30 @@
   },
   "components": {
     "schemas": {
+      "MoveSectionsRequest": {
+        "required": [
+          "parentUnitId"
+        ],
+        "type": "object",
+        "properties": {
+          "parentUnitId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "links": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SectionUnitLink"
+            }
+          }
+        }
+      },
       "RotaEntry": {
         "required": [
           "userId",
@@ -622,10 +744,129 @@
           }
         }
       },
+      "SectionExportItem": {
+        "required": [
+          "sectionId",
+          "name",
+          "kind",
+          "categories",
+          "shifts",
+          "unit",
+          "movedToUnitId"
+        ],
+        "type": "object",
+        "properties": {
+          "sectionId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SectionKind"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "shifts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/SectionUnitDraft"
+          },
+          "movedToUnitId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
       "SectionKind": {
         "enum": [
           "Category",
           "Department"
+        ],
+        "type": "string"
+      },
+      "SectionMoveItem": {
+        "required": [
+          "sectionId",
+          "name",
+          "kind",
+          "status",
+          "unitId",
+          "shiftsMoved",
+          "detail"
+        ],
+        "type": "object",
+        "properties": {
+          "sectionId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SectionKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SectionMoveStatus"
+          },
+          "unitId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "shiftsMoved": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SectionMoveReport": {
+        "required": [
+          "parentUnitId",
+          "sections"
+        ],
+        "type": "object",
+        "properties": {
+          "parentUnitId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SectionMoveItem"
+            }
+          }
+        }
+      },
+      "SectionMoveStatus": {
+        "enum": [
+          "Created",
+          "AlreadyMapped",
+          "Linked",
+          "Failed"
         ],
         "type": "string"
       },
@@ -692,6 +933,75 @@
           "checkoutGrace": {
             "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
             "type": "string"
+          }
+        }
+      },
+      "SectionsExport": {
+        "required": [
+          "exportedAt",
+          "sections"
+        ],
+        "type": "object",
+        "properties": {
+          "exportedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SectionExportItem"
+            }
+          }
+        }
+      },
+      "SectionUnitDraft": {
+        "required": [
+          "typeKey",
+          "nameEn",
+          "nameAr",
+          "tags",
+          "categories"
+        ],
+        "type": "object",
+        "properties": {
+          "typeKey": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SectionUnitLink": {
+        "required": [
+          "sectionId",
+          "unitId"
+        ],
+        "type": "object",
+        "properties": {
+          "sectionId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },
@@ -809,6 +1119,13 @@
             "items": {
               "$ref": "#/components/schemas/RotaMemberDto"
             }
+          },
+          "unitId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -838,6 +1155,13 @@
             "items": {
               "$ref": "#/components/schemas/RotaEntry"
             }
+          },
+          "unitId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -848,6 +1172,95 @@
           "Editor"
         ],
         "type": "string"
+      },
+      "UnitDto": {
+        "required": [
+          "id",
+          "orgId",
+          "parentId",
+          "typeKey",
+          "path",
+          "nameEn",
+          "nameAr",
+          "tags",
+          "timeZone",
+          "categories",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "typeKey": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UnitResyncResult": {
+        "required": [
+          "listed",
+          "changed",
+          "deleted"
+        ],
+        "type": "object",
+        "properties": {
+          "listed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "changed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "deleted": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       }
     },
     "securitySchemes": {

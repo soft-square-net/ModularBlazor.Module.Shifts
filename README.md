@@ -12,9 +12,9 @@ runtime module: see [docs/clean-architecture.md](docs/clean-architecture.md) for
 the rota becomes grants, and where a new feature goes.
 
 ```
-src/WebApi.Modules.Shifts.Core/             Core: aggregates (SectionAggregate, ShiftAggregate), domain rules, specifications
+src/WebApi.Modules.Shifts.Core/             Core: aggregates (SectionAggregate, ShiftAggregate, UnitAggregate), domain rules, specifications
 src/WebApi.Modules.Shifts.UseCases/         use cases: one folder each, a Mediator command or query and its handler, returning an Ardalis Result
-src/WebApi.Modules.Shifts.Infrastructure/   data: ShiftsDbContext, entity configurations, tenant migrations per database provider
+src/WebApi.Modules.Shifts.Infrastructure/   data: ShiftsDbContext, entity configurations, tenant migrations per database provider; HTTP access to Organization
 src/WebApi.Modules.Shifts.Web/              entry assembly: IRuntimeModule, the Carter route table, one REPR endpoint class per route
 src/WebApi.Modules.Shifts.Client/           typed API client (NSwag), shipped as a hidden client module
 src/Module.Shifts/                          Shifts Management: the Blazor client module (MudTail), loaded by ModularBlazor.BlzWebClient
@@ -106,6 +106,90 @@ A section has a kind (`SectionKind`, sent and stored by name):
   is the endpoint above, not a lookup.
 - Content checks a content's rights against `press:` and `category:` scopes today. For a department's rota to act on
   the contents routed to it, Content adds `section:{SectionId}` to a content's scopes (its phase 2 part).
+- Sections are being replaced by Organization units: see the next section. Once moved, they are read-only.
+
+## Organization units (Shifts v2, step S1)
+
+Shifts are moving from the module's own sections to the units of the
+[Organization](https://github.com/soft-square-net/ModularBlazor.Module.Organization) service
+(Org > Sector > Department > Section). The module references `soft.square.net.Organization.Contracts` and
+`soft.square.net.Organization.Client` (1.0.0-preview.1, private: copied into its output).
+
+### The unit cache
+
+`unit_cache` keeps the tenant's units as this module last heard of them: id, org, parent, type, path, names, tags,
+time zone, categories and version (`GET /api/shifts/units`, `shifts.view`).
+
+- **Events.** The module uses integration events (`UsesIntegrationEvents`, the outbox and inbox in schema `shifts`) and
+  subscribes to `org.unit-*.v1` and `org.membership-changed.v1`.
+  - Created and updated units are applied by version: a state that is not newer than the cached one (a duplicate, or
+    a late event) changes nothing.
+  - A move rebases the unit's whole subtree, but only when the move is newer for the unit, so a late move cannot drag
+    the subtree back.
+  - A removed unit stays as a tombstone: later events for it are ignored.
+  - A membership on a unit the cache has never seen makes the module read that unit from the directory, as its service
+    client (when one is configured).
+- **First fill.** For each tenant, when the module loads, the module reads `IUnitDirectory.ListAsync` from the
+  deployment's local Organization API, as its own service client. Without a service client, or when Organization is
+  unreachable, it only logs: the tenant still starts.
+- **Resync.** `POST /api/shifts/units/resync` (`shifts.manage`) does the same read with the admin's token. It applies the
+  listed units by version and drops the cached units the directory no longer lists.
+
+Settings (module settings, section `Shifts:Organization`):
+
+| Setting | Meaning |
+| --- | --- |
+| `BaseUrl` | The address that serves this deployment's `/api/organization/local/*` (the gateway, or an internal address), for example `https://gateway/`. Empty: the module never calls Organization, and the cache fills from events only. |
+| `CentralUrl` | The address of the central management API `/api/organization/*`. Empty: `BaseUrl`. |
+| `TokenEndpoint`, `ClientId`, `ClientSecret`, `ClientScope` | The module's service client (client credentials), for the first fill. Put the secret in the host's settings, never in the module defaults. |
+
+### Shifts in units
+
+`Shift.UnitId` sits next to `SectionId`. A new shift (`POST /api/shifts/shifts`) gets its unit as follows:
+
+| The shift's section | `unitId` left out | `unitId` given |
+| --- | --- | --- |
+| Has not moved yet | no unit (`UnitId` null, as before), so today's client keeps planning shifts | that unit, which must be cached and not removed (else 400) |
+| Has moved | the section's unit | the section's unit only (any other is 400) |
+
+An update can give a unit to a shift that has none, but never moves a shift to another unit.
+
+A published shift's grants are written on these scopes:
+
+- `unit:{id}` (the unit id in its 32-digit form);
+- `category:{c}` for each category of the unit (Organization's `CategoriesOf`: the unit's own categories, or those of
+  the units below it; the wildcard `*` is skipped);
+- `section:{unitId}` for a unit tagged `department` (a department section);
+- the section's own scopes (`category:{c}`, or `section:{sectionId}` for a department), as long as the shift still has
+  its section. Content checks those scopes until it remaps.
+
+A shift whose unit is not cached keeps its section's scopes only.
+
+### Moving the sections to Organization
+
+`POST /api/shifts/sections/move-to-organization` (`shifts.manage`) takes `{ "parentUnitId": "<Department unit>" }`.
+
+- **What it does for each section that has not moved yet:**
+  - It creates a Section unit under that Department through the central API, with the caller's token. The unit gets
+    the section's name (in both languages) and its categories. A department section gets the tag `department` and the
+    wildcard category `*` (decision D1).
+  - It records `section_unit_map` (section → unit), sets `UnitId` on every shift of the section, and publishes
+    `shifts.section-moved.v1` `{ sectionId, unitId }` (subject `section:{sectionId}`, with the unit path and the org id
+    on the envelope), all in one save.
+  - It rewrites the grants of the section's published shifts that have not ended.
+- **Idempotent.** A moved section is reported `AlreadyMapped`. A Section unit with the same name under the parent, left
+  by an interrupted run, is reused rather than created again.
+- **One result per section:** `Created`, `AlreadyMapped`, `Linked` or `Failed`, with the reason. For example, if
+  Organization does not accept `*` yet, the department sections fail with Organization's answer and a note about D1,
+  and the other sections still move. Run the move again once that is fixed.
+- **By hand**, when this deployment cannot reach the central service:
+  1. `GET /api/shifts/sections/export` returns each section with the Section unit to create for it (type, names, tags,
+     categories).
+  2. Create those units in Organization.
+  3. Once the units are in the cache, link them: `{ "links": [{ "sectionId": 1, "unitId": "…" }] }`. Each linked
+     section is reported `Linked`.
+- **After the move**, the section endpoints are read-only: adding or changing a section answers 409. The sections are
+  removed in S4.
 
 ## Developing
 

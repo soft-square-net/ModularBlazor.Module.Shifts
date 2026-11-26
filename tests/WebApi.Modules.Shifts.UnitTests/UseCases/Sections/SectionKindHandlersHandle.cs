@@ -32,7 +32,7 @@ public class SectionKindHandlersHandle
     [Fact]
     public async Task AddsADepartment()
     {
-        var result = await new AddSectionHandler(AddingRepository())
+        var result = await new AddSectionHandler(AddingRepository(), Substitute.For<IReadRepository<SectionUnitMap>>())
             .Handle(new AddSectionCommand("SEO", [], null, null, SectionKind.Department), Ct);
 
         result.IsSuccess.ShouldBeTrue();
@@ -43,7 +43,7 @@ public class SectionKindHandlersHandle
     [Fact]
     public async Task AddsACategorySectionWhenNoKindIsGiven()
     {
-        var result = await new AddSectionHandler(AddingRepository()).Handle(new AddSectionCommand("Sport", ["sport"], null, null), Ct);
+        var result = await new AddSectionHandler(AddingRepository(), Substitute.For<IReadRepository<SectionUnitMap>>()).Handle(new AddSectionCommand("Sport", ["sport"], null, null), Ct);
 
         result.Value.Kind.ShouldBe(SectionKind.Category);
     }
@@ -55,7 +55,7 @@ public class SectionKindHandlersHandle
         fixture.ShiftReader.ListAsync(Arg.Any<ISpecification<Shift>>(), Arg.Any<CancellationToken>()).Returns([]);
         var sections = Holding(Section.CreateDepartment("Multimedia").WithId(4));
 
-        var result = await new UpdateSectionHandler(sections, fixture.ShiftReader, fixture.ShiftGrants, fixture.Caller)
+        var result = await new UpdateSectionHandler(sections, fixture.ShiftReader, fixture.Moved, fixture.ShiftGrants, fixture.Caller)
             .Handle(new UpdateSectionCommand(4, "Photo and video", [], 1, null), Ct);
 
         result.IsSuccess.ShouldBeTrue();
@@ -71,7 +71,7 @@ public class SectionKindHandlersHandle
         fixture.ShiftReader.ListAsync(Arg.Any<ISpecification<Shift>>(), Arg.Any<CancellationToken>()).Returns([shift]);
         var sections = Holding(Section.Create("Desk", ["politics"], null, null).WithId(1));
 
-        var result = await new UpdateSectionHandler(sections, fixture.ShiftReader, fixture.ShiftGrants, fixture.Caller)
+        var result = await new UpdateSectionHandler(sections, fixture.ShiftReader, fixture.Moved, fixture.ShiftGrants, fixture.Caller)
             .Handle(new UpdateSectionCommand(1, "Multimedia", [], null, null, SectionKind.Department), Ct);
 
         result.IsSuccess.ShouldBeTrue();

@@ -53,7 +53,7 @@ Core  <-  UseCases  <-  Web
   +---  Infrastructure <-+
 ```
 
-- Core references nothing of the module. UseCases references Core only. Infrastructure references Core only.
+- Core references nothing of the module. UseCases references Core only. Infrastructure references Core, and UseCases for the ports it implements (`IUnitCacheStore`, `IOrganizationAccess`).
 - Web references UseCases and Infrastructure and is the only place that wires them together (`ServiceConfigs`).
 - UseCases never touches EF Core: handlers get `IRepository<T>` / `IReadRepository<T>` (the platform registers EF
   repositories for them) and query with specifications from Core.

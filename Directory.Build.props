@@ -18,5 +18,7 @@
   <PropertyGroup>
     <ArdalisResultVersion>10.1.0</ArdalisResultVersion>
     <MediatorVersion>3.0.2</MediatorVersion>
+    <!-- The Organization service's contracts (org.* events, IUnitDirectory, UnitScopes) and its typed API client. -->
+    <OrganizationPackagesVersion>1.0.0-preview.1</OrganizationPackagesVersion>
   </PropertyGroup>
 </Project>

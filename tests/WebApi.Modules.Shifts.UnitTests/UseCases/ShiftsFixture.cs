@@ -3,6 +3,7 @@ using soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate;
 using soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate;
 using soft.square.net.WebApi.Modules.Shifts.UseCases;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Shifts;
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Units;
 
 namespace soft.square.net.WebApi.Modules.Shifts.UnitTests.UseCases;
 
@@ -14,12 +15,17 @@ public sealed class ShiftsFixture
     public IRepository<Shift> Shifts { get; } = Substitute.For<IRepository<Shift>>();
     public IReadRepository<Shift> ShiftReader { get; } = Substitute.For<IReadRepository<Shift>>();
     public IReadRepository<Section> SectionReader { get; } = Substitute.For<IReadRepository<Section>>();
+    /// <summary>The section-to-unit rows: none unless a test adds them.</summary>
+    public IReadRepository<SectionUnitMap> Moved { get; } = Substitute.For<IReadRepository<SectionUnitMap>>();
+    public FakeUnitCacheStore UnitStore { get; } = new();
     public TestClock Clock { get; } = new();
 
     public ShiftCaller Caller { get; }
     public ShiftGrants ShiftGrants { get; }
     public ShiftDetails Details { get; }
     public ShiftChanges Changes { get; }
+    public UnitCache Units { get; }
+    public ShiftUnits ShiftUnits { get; }
 
     /// <summary>The section every stored shift belongs to: two categories.</summary>
     public Section Section { get; } = Section.Create("Politics desk", ["politics", "economy"], null, null);
@@ -28,7 +34,9 @@ public sealed class ShiftsFixture
     {
         Access.UserId.Returns(userId);
         Caller = new ShiftCaller(Access, Clock);
-        ShiftGrants = new ShiftGrants(Grants);
+        Units = new UnitCache(UnitStore);
+        ShiftUnits = new ShiftUnits(Moved, Units);
+        ShiftGrants = new ShiftGrants(Grants, Units);
         Details = new ShiftDetails(ShiftReader, SectionReader, Caller);
         Changes = new ShiftChanges(Shifts, SectionReader, ShiftGrants, Details);
 

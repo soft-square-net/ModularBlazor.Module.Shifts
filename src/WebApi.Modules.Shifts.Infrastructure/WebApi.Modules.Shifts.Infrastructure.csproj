@@ -3,7 +3,8 @@
 
   <!--
     Infrastructure: the tenant DbContext (Data/ShiftsDbContext.cs), the entity mappings (Data/Config) and the
-    migrations, one set per engine (Data/Migrations/<Provider>). References Core only.
+    migrations, one set per engine (Data/Migrations/<Provider>), and the HTTP access to Organization (Organization/).
+    References Core, and UseCases for the ports it implements.
     The Module SDK compiles it against WebApi.Data (EF Core, TenantDbContext, repositories), provided by the host, and
     makes it loadable on its own (EnableDynamicLoading), which dotnet-ef needs to add migrations to this project.
     It is not the entry assembly: WebApi.Modules.Shifts.Web is.
@@ -11,6 +12,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\WebApi.Modules.Shifts.Core\WebApi.Modules.Shifts.Core.csproj" />
+    <!-- The ports it implements: the unit cache store, the Organization access. -->
+    <ProjectReference Include="..\WebApi.Modules.Shifts.UseCases\WebApi.Modules.Shifts.UseCases.csproj" />
   </ItemGroup>
 
 </Project>
