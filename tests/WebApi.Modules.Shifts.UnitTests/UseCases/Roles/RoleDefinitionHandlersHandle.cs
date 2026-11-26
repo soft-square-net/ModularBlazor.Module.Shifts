@@ -89,7 +89,7 @@ public class RoleDefinitionHandlersHandle
     public async Task NewPermissionsRewriteTheGrantsOfPublishedShiftsThatHaveNotEnded()
     {
         _fixture.ShiftAdmin();
-        var running = ShiftBuilder.Published(_fixture.Clock.Now.AddHours(-1)).WithId(10);
+        var running = ShiftBuilder.CheckedIn(_fixture.Clock.Now.AddHours(-1)).WithId(10);
         var ended = ShiftBuilder.Published(_fixture.Clock.Now.AddHours(-10)).WithId(11);
         _notEnded.AddRange([running, ended]);
 
@@ -137,7 +137,7 @@ public class RoleDefinitionHandlersHandle
     {
         _fixture.ShiftAdmin();
         Override(20, "desk", false, Sport, "content.review");
-        var shift = ShiftBuilder.Published(_fixture.Clock.Now.AddHours(1), Sport).WithId(10);
+        var shift = ShiftBuilder.CheckedIn(_fixture.Clock.Now.AddHours(1), Sport).WithId(10);
         _notEnded.Add(shift);
 
         var deleted = await Delete.Handle(new DeleteRoleDefinitionCommand(20), Ct);

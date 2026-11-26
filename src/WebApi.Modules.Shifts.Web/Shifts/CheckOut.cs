@@ -12,7 +12,7 @@ public sealed class CheckOut : IEndpoint
     public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) =>
         app.MapPost("/shifts/{id:int}/check-out", HandleAsync)
             .WithName("Shifts_CheckOutShift")
-            .WithSummary("Handover: the whole shift checks out and every member's grants end now (the shift's manager, or a shift admin).");
+            .WithSummary("Handover: the whole shift checks out, everyone still in is checked out now and the shift ends (its lead, or a manager of its unit).");
 
     private static async Task<Results<Ok<ShiftDto>, ProblemHttpResult>> HandleAsync(int id, ISender sender, CancellationToken ct) =>
         (await sender.Send(new CheckOutShiftCommand(id), ct)).ToOkResult();

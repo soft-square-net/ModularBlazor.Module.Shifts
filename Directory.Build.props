@@ -8,6 +8,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <!--
+      The version of the packages (Shifts.Contracts) and of the next release (bundle shifts-2.0.0-preview.1). The
+      release tag is v$(Version); packages.yml checks that they agree.
+    -->
+    <VersionPrefix>2.0.0</VersionPrefix>
+    <VersionSuffix>preview.1</VersionSuffix>
   </PropertyGroup>
 
   <!--

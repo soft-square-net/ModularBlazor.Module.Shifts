@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Shifts.Contracts: the public contract of the Shifts module, shipped as the NuGet package
+    soft.square.net.Shifts.Contracts.
+    - The shifts.* integration event records (v1), with their type names (ShiftsEvents), and ShiftSnapshot.
+    - The live topic and message names (ShiftsLive) and the attendance status names (AttendanceStatuses).
+    Plain data and the BCL only (no platform package), so any module (Elsa, NewsRoom, Content), client or service can
+    reference it. A module copies it into its own output (a private dependency): no type of it is shared across load
+    contexts. A subscriber may also copy the records instead of referencing the package.
+  -->
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>$(SoftSquarePrefix).Shifts.Contracts</PackageId>
+    <Description>Contracts of the ModularBlazor Shifts module: shifts.* integration events (v1), ShiftSnapshot, live topic and attendance names.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+  </PropertyGroup>
+
+</Project>

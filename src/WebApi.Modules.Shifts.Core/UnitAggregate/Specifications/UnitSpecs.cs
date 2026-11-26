@@ -19,3 +19,9 @@ public sealed class UnitsBelowSpec : Specification<CachedUnit>
         Query.Where(u => u.Path.StartsWith(prefix));
     }
 }
+
+/// <summary>The attendance overrides of these units (any order).</summary>
+public sealed class UnitAttendanceOfSpec : Specification<UnitAttendance>
+{
+    public UnitAttendanceOfSpec(IReadOnlyCollection<Guid> unitIds) => Query.Where(u => unitIds.Contains(u.Id));
+}

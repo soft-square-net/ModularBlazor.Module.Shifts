@@ -34,7 +34,7 @@ public class MoveSectionsHandlerHandle
     public MoveSectionsHandlerHandle()
     {
         _fixture.SectionReader.ListAsync(Arg.Any<ISpecification<Section>>(), Arg.Any<CancellationToken>()).Returns([_politics, _seo]);
-        _politicsShift = ShiftBuilder.Published(_fixture.Clock.Now.AddHours(1));
+        _politicsShift = ShiftBuilder.CheckedIn(_fixture.Clock.Now.AddHours(1));
         _fixture.Shifts.ListAsync(Arg.Any<ISpecification<Shift>>(), Arg.Any<CancellationToken>())
             .Returns(c => c.Arg<ISpecification<Shift>>() is var spec && Matches(spec, _politics.Id) ? [_politicsShift] : new List<Shift>());
 

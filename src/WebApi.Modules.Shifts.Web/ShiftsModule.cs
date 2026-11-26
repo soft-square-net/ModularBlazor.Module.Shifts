@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using soft.square.net.Shifts.Contracts;
 using soft.square.net.WebApi.Contracts;
+using soft.square.net.WebApi.Contracts.Live;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Units;
 using soft.square.net.WebApi.Modules.Shifts.Web.Configurations;
 
@@ -20,11 +22,16 @@ public sealed class ShiftsModule : IRuntimeModule
 {
     public ModuleManifest Manifest { get; } = new("shifts", "Shifts", "0.1.0", "shifts")
     {
-        Description = "Newsroom shifts: units, rota roles as data, templates, check-out; the rota becomes time-windowed grants.",
+        Description = "Newsroom shifts: units, rota roles as data, templates, attendance; checking in grants the role's rights until check-out.",
         DefaultSettings = new Dictionary<string, string?>
         {
             ["Shifts:AutoAssignDelay"] = "00:05:00",
             ["Shifts:CheckoutGrace"] = "00:15:00",
+            ["Shifts:EarlyCheckIn"] = "00:30:00",
+            ["Shifts:LateAfter"] = "00:10:00",
+            ["Shifts:AbsentAfter"] = "01:00:00",
+            ["Shifts:OvertimeAfter"] = "00:15:00",
+            ["Shifts:ClockInterval"] = "00:01:00",
             ["Shifts:Organization:BaseUrl"] = "",
             ["Shifts:Organization:CentralUrl"] = "",
             ["Shifts:Organization:TokenEndpoint"] = "",
@@ -32,7 +39,10 @@ public sealed class ShiftsModule : IRuntimeModule
             ["Shifts:Organization:ClientScope"] = ""
         },
         Permissions = ShiftPermissions.All,
-        Subscriptions = [.. OrgEventsHandler.Patterns]
+        Subscriptions = [.. OrgEventsHandler.Patterns],
+        // shifts:shift:{id}: a nudge after any change of the shift; shifts.view on shift:{id}, on its unit or an ancestor
+        // (ShiftLiveScopes), or tenant-wide.
+        LiveTopics = [new LiveTopic(ShiftsLive.Kind, ShiftPermissions.View)]
     };
 
     public void ConfigureServices(IServiceCollection services, IConfiguration settings) => services.AddServiceConfigs(settings);

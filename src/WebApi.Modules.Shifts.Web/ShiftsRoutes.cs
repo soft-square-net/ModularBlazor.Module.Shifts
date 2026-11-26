@@ -1,4 +1,5 @@
 using Carter;
+using Attendance = soft.square.net.WebApi.Modules.Shifts.Web.Attendance;
 using Roles = soft.square.net.WebApi.Modules.Shifts.Web.Roles;
 using Sections = soft.square.net.WebApi.Modules.Shifts.Web.Sections;
 using Shifts = soft.square.net.WebApi.Modules.Shifts.Web.Shifts;
@@ -28,6 +29,8 @@ public sealed class ShiftsRoutes : ICarterModule
 
         Units.List.Map(shifts);
         Units.Resync.Map(shifts);
+        Attendance.GetUnitAttendance.Map(shifts);
+        Attendance.SetUnitAttendance.Map(shifts);
 
         Roles.List.Map(shifts);
         Roles.ListEffective.Map(shifts);
@@ -44,14 +47,18 @@ public sealed class ShiftsRoutes : ICarterModule
 
         Shifts.ListMine.Map(shifts);
         Shifts.ListOverdue.Map(shifts);
+        Shifts.ListEnded.Map(shifts);
         Shifts.List.Map(shifts);
         Shifts.GetById.Map(shifts);
         Shifts.GetAutomation.Map(shifts);
         Shifts.Add.Map(shifts);
         Shifts.Update.Map(shifts);
         Shifts.Publish.Map(shifts);
+        Shifts.CheckIn.Map(shifts);
+        Shifts.CheckIn.MapMember(shifts);
         Shifts.CheckOut.Map(shifts);
         Shifts.CheckOutMember.Map(shifts);
+        Shifts.Handover.Map(shifts);
         Shifts.Delete.Map(shifts);
     }
 }

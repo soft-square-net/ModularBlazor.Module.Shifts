@@ -2,7 +2,7 @@
   "openapi": "3.1.1",
   "info": {
     "title": "Shifts",
-    "description": "Newsroom shifts: units, rota roles as data, templates, check-out; the rota becomes time-windowed grants.",
+    "description": "Newsroom shifts: units, rota roles as data, templates, attendance; checking in grants the role's rights until check-out.",
     "version": "0.1.0"
   },
   "servers": [
@@ -263,6 +263,78 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UnitResyncResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shifts/units/{id}/attendance": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "A unit's own attendance overrides (null: inherited) and the effective thresholds (its ancestors', else the module's settings).",
+        "operationId": "Shifts_GetUnitAttendance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitAttendanceDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "Sets a unit's attendance overrides in minutes (early check-in, late, absent, overtime, check-out grace); null inherits.",
+        "operationId": "Shifts_SetUnitAttendance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnitAttendanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitAttendanceDto"
                 }
               }
             }
@@ -672,6 +744,49 @@
         }
       }
     },
+    "/api/shifts/shifts/ended": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "Shifts that ended (checked out as a whole, or by the clock) at or after since, ordered by the time they ended (for the workflow's handover).",
+        "operationId": "Shifts_ListEnded",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "take",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EndedShiftDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/shifts/shifts": {
       "get": {
         "tags": [
@@ -883,7 +998,7 @@
         "tags": [
           "Shifts"
         ],
-        "summary": "Writes the rota's grants: each member's role permissions on the section's categories, valid for the shift only.",
+        "summary": "Publishes the shift (shifts.published.v1): its members may now check in; each gets their role permissions from check-in to check-out.",
         "operationId": "Shifts_PublishShift",
         "parameters": [
           {
@@ -911,12 +1026,86 @@
         }
       }
     },
+    "/api/shifts/shifts/{id}/check-in": {
+      "post": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "The caller checks in to a shift of theirs: their grants start now (from the early check-in threshold before the start until the end).",
+        "operationId": "Shifts_CheckIn",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shifts/shifts/{id}/members/{userId}/check-in": {
+      "post": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "The shift's lead or a manager of its unit checks a member in: the member's grants start now.",
+        "operationId": "Shifts_CheckInMember",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/shifts/shifts/{id}/check-out": {
       "post": {
         "tags": [
           "Shifts"
         ],
-        "summary": "Handover: the whole shift checks out and every member's grants end now (the shift's manager, or a shift admin).",
+        "summary": "Handover: the whole shift checks out, everyone still in is checked out now and the shift ends (its lead, or a manager of its unit).",
         "operationId": "Shifts_CheckOutShift",
         "parameters": [
           {
@@ -984,10 +1173,151 @@
           }
         }
       }
+    },
+    "/api/shifts/shifts/{id}/handover": {
+      "put": {
+        "tags": [
+          "Shifts"
+        ],
+        "summary": "The shift's lead writes (or rewrites) the handover note, once the shift has started; published as shifts.handover.v1.",
+        "operationId": "Shifts_WriteHandover",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandoverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftDto"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AttendanceThresholdsDto": {
+        "required": [
+          "earlyCheckInMinutes",
+          "lateMinutes",
+          "absentMinutes",
+          "overtimeMinutes",
+          "checkoutGraceMinutes"
+        ],
+        "type": "object",
+        "properties": {
+          "earlyCheckInMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lateMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "absentMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "overtimeMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "checkoutGraceMinutes": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "EndedShiftDto": {
+        "required": [
+          "id",
+          "unitId",
+          "sectionId",
+          "startsAt",
+          "endsAt",
+          "endedAt",
+          "endedBy",
+          "checkedOutAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unitId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "sectionId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endedBy": {
+            "type": "string"
+          },
+          "checkedOutAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "HandoverRequest": {
+        "required": [
+          "note"
+        ],
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          }
+        }
+      },
       "MoveSectionsRequest": {
         "required": [
           "parentUnitId"
@@ -1144,7 +1474,14 @@
           "userId",
           "roleKey",
           "isLead",
+          "status",
+          "checkedInAt",
+          "checkedInBy",
           "checkedOutAt",
+          "checkedOutBy",
+          "checkedOutAutomatically",
+          "absentAt",
+          "accessFrom",
           "accessEnds"
         ],
         "type": "object",
@@ -1158,6 +1495,22 @@
           "isLead": {
             "type": "boolean"
           },
+          "status": {
+            "type": "string"
+          },
+          "checkedInAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "checkedInBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "checkedOutAt": {
             "type": [
               "null",
@@ -1165,8 +1518,34 @@
             ],
             "format": "date-time"
           },
+          "checkedOutBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "checkedOutAutomatically": {
+            "type": "boolean"
+          },
+          "absentAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "accessFrom": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
           "accessEnds": {
-            "type": "string",
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           }
         }
@@ -1536,7 +1915,16 @@
           "checkedOutAt",
           "checkedOutBy",
           "grantSource",
-          "rota"
+          "rota",
+          "unitId",
+          "ended",
+          "checkInOpensAt",
+          "handoverNote",
+          "handoverBy",
+          "handoverAt",
+          "thresholds",
+          "endedAt",
+          "endedBy"
         ],
         "type": "object",
         "properties": {
@@ -1602,6 +1990,48 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "ended": {
+            "type": "boolean"
+          },
+          "checkInOpensAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "handoverNote": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "handoverBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "handoverAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/AttendanceThresholdsDto"
+          },
+          "endedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "endedBy": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -1789,6 +2219,109 @@
           },
           "count": {
             "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UnitAttendanceDto": {
+        "required": [
+          "unitId",
+          "earlyCheckInMinutes",
+          "lateMinutes",
+          "absentMinutes",
+          "overtimeMinutes",
+          "checkoutGraceMinutes",
+          "effective"
+        ],
+        "type": "object",
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "earlyCheckInMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "lateMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "absentMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "overtimeMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "checkoutGraceMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "effective": {
+            "$ref": "#/components/schemas/AttendanceThresholdsDto"
+          }
+        }
+      },
+      "UnitAttendanceRequest": {
+        "required": [
+          "earlyCheckInMinutes",
+          "lateMinutes",
+          "absentMinutes",
+          "overtimeMinutes",
+          "checkoutGraceMinutes"
+        ],
+        "type": "object",
+        "properties": {
+          "earlyCheckInMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "lateMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "absentMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "overtimeMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "checkoutGraceMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
             "format": "int32"
           }
         }

@@ -76,7 +76,7 @@ public class SectionKindHandlersHandle
     public async Task TurningASectionIntoADepartmentRegrantsItsShiftsOnTheSection()
     {
         var fixture = Admin();
-        var shift = ShiftBuilder.Published(fixture.Clock.Now.AddHours(1));
+        var shift = ShiftBuilder.CheckedIn(fixture.Clock.Now.AddHours(1));
         fixture.ShiftReader.ListAsync(Arg.Any<ISpecification<Shift>>(), Arg.Any<CancellationToken>()).Returns([shift]);
         var sections = Holding(Section.Create("Desk", ["politics"], null, null).WithId(1));
 
@@ -88,7 +88,7 @@ public class SectionKindHandlersHandle
     }
 
     [Fact]
-    public async Task PublishingADepartmentShiftGrantsTheRotaOnTheDepartment()
+    public async Task ADepartmentShiftGrantsTheCheckedInRotaOnTheDepartment()
     {
         var fixture = Admin();
         var department = Section.CreateDepartment("Multimedia").WithId(1);
@@ -97,13 +97,16 @@ public class SectionKindHandlersHandle
         var shift = ShiftBuilder.Planned(fixture.Clock.Now.AddHours(1));
         fixture.Stored(shift);
 
-        var result = await new PublishShiftHandler(fixture.Changes, fixture.Authority).Handle(new PublishShiftCommand(shift.Id), Ct);
-
+        var result = await new PublishShiftHandler(fixture.Changes, fixture.Authority, fixture.Notices).Handle(new PublishShiftCommand(shift.Id), Ct);
         result.IsSuccess.ShouldBeTrue();
+        fixture.WrittenGrants(shift).ShouldBeEmpty(); // publishing grants nobody anything
+        ShiftBuilder.CheckEveryoneIn(shift, shift.StartsAt);
+        await fixture.ShiftGrants.WriteAsync(shift, department, Ct);
+
         var grants = fixture.WrittenGrants(shift);
         grants.Count.ShouldBe(4 + 2 + 1); // the Manager, Desk and Editor permissions once each: a single scope
         grants.ShouldAllBe(g => g.Scope == "section:1");
-        grants.ShouldContain(new NewGrant(ShiftBuilder.Desk, "content.publish", "section:1", shift.StartsAt, shift.EndsAt));
+        grants.ShouldContain(new NewGrant(ShiftBuilder.Desk, "content.publish", "section:1", shift.StartsAt, shift.EndsAt + ShiftBuilder.Grace));
     }
 
     [Fact]

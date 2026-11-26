@@ -26,6 +26,7 @@ public sealed class ShiftsDbContext(DbContextOptions<ShiftsDbContext> options, I
     public DbSet<SectionUnitMap> SectionUnitMaps => Set<SectionUnitMap>();
     public DbSet<Shift> Shifts => Set<Shift>();
     public DbSet<CachedUnit> Units => Set<CachedUnit>();
+    public DbSet<UnitAttendance> UnitAttendance => Set<UnitAttendance>();
     public DbSet<ShiftRoleDefinition> Roles => Set<ShiftRoleDefinition>();
     public DbSet<ShiftTemplate> Templates => Set<ShiftTemplate>();
 

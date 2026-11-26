@@ -110,7 +110,7 @@ public class UnitShiftPlanning
         var result = await Add(null, new RotaEntry("anyone", "Manager")); // the old role names still work
 
         result.IsSuccess.ShouldBeTrue();
-        result.Value.Rota.Single().ShouldBe(new RotaMemberDto("anyone", "manager", true, null, result.Value.EndsAt));
+        result.Value.Rota.Single().ShouldBe(new RotaMemberDto("anyone", "manager", true, "expected", null, null, null, null, false, null, null, null));
     }
 
     [Fact]
@@ -138,7 +138,9 @@ public class UnitShiftPlanning
 
         var shift = _fixture.Shifts.ReceivedCalls().Select(c => c.GetArguments()[0]).OfType<Shift>().First();
         _fixture.Stored(shift);
-        (await new PublishShiftHandler(_fixture.Changes, _fixture.Authority).Handle(new PublishShiftCommand(shift.Id), Ct)).IsSuccess.ShouldBeTrue();
+        (await new PublishShiftHandler(_fixture.Changes, _fixture.Authority, _fixture.Notices).Handle(new PublishShiftCommand(shift.Id), Ct)).IsSuccess.ShouldBeTrue();
+        ShiftBuilder.CheckEveryoneIn(shift, shift.StartsAt);
+        await _fixture.ShiftGrants.WriteAsync(shift, _fixture.Section, Ct);
 
         planned.IsSuccess.ShouldBeTrue();
         var grants = _fixture.WrittenGrants(shift);
@@ -157,7 +159,7 @@ public class UnitShiftPlanning
         _fixture.Stored(shift);
 
         draft.Published.ShouldBeFalse();
-        await Should.ThrowAsync<DomainException>(() => new PublishShiftHandler(_fixture.Changes, _fixture.Authority)
+        await Should.ThrowAsync<DomainException>(() => new PublishShiftHandler(_fixture.Changes, _fixture.Authority, _fixture.Notices)
             .Handle(new PublishShiftCommand(shift.Id), Ct).AsTask());
     }
 
@@ -171,7 +173,7 @@ public class UnitShiftPlanning
         var shift = ShiftBuilder.Published(fixture.Clock.Now.AddHours(-9), Sport);
         fixture.Stored(shift);
 
-        var result = await new CheckOutShiftHandler(fixture.Changes, fixture.Caller, fixture.Authority).Handle(new CheckOutShiftCommand(shift.Id), Ct);
+        var result = await new CheckOutShiftHandler(fixture.Changes, fixture.Caller, fixture.Authority, fixture.Notices).Handle(new CheckOutShiftCommand(shift.Id), Ct);
 
         result.IsSuccess.ShouldBeTrue();
     }
