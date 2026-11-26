@@ -12,7 +12,10 @@ using static soft.square.net.WebApi.Modules.Shifts.UnitTests.UseCases.Units.OrgU
 
 namespace soft.square.net.WebApi.Modules.Shifts.UnitTests.UseCases.Shifts;
 
-/// <summary>Every new shift names a cached unit; the sections are read-only once moved.</summary>
+/// <summary>
+/// A shift's unit during the move: optional on a section that has not moved, the section's unit (and no other) once it
+/// has, always a cached one when named; the sections are read-only once moved.
+/// </summary>
 public class ShiftUnitsHandle
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -46,18 +49,37 @@ public class ShiftUnitsHandle
     }
 
     [Fact]
-    public async Task ANewShiftNeedsAUnit()
+    public async Task ASectionThatHasNotMovedStillPlansShiftsWithoutAUnit()
     {
         var result = await Add(null);
 
-        result.Status.ShouldBe(ResultStatus.Invalid);
-        await _fixture.Shifts.DidNotReceiveWithAnyArgs().AddAsync(default!, Ct);
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.UnitId.ShouldBeNull();
+        await _fixture.Shifts.Received(1).AddAsync(Arg.Is<Shift>(s => s.UnitId == null), Ct);
+    }
+
+    [Fact]
+    public async Task ASectionThatHasNotMovedMayNameACachedUnit()
+    {
+        await _fixture.Units.ApplyAsync(State(SportUnit()), Ct);
+
+        (await Add(Sport)).Value.UnitId.ShouldBe(Sport);
     }
 
     [Fact]
     public async Task AUnitTheModuleHasNotCachedIsRefused()
     {
         (await Add(Guid.NewGuid())).Status.ShouldBe(ResultStatus.Invalid);
+        await _fixture.Shifts.DidNotReceiveWithAnyArgs().AddAsync(default!, Ct);
+    }
+
+    [Fact]
+    public async Task AShiftWithoutAnExistingSectionIsRefused()
+    {
+        _fixture.SectionReader.GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns((Section?)null);
+
+        (await Add(null)).Status.ShouldBe(ResultStatus.NotFound);
+        await _fixture.Shifts.DidNotReceiveWithAnyArgs().AddAsync(default!, Ct);
     }
 
     [Fact]

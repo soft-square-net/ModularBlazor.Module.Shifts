@@ -124,7 +124,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Plans a shift with its rota (exactly one Manager) in a cached Organization unit: unitId, or the unit its section moved to. Nothing is granted until it is published.
+        /// Plans a shift with its rota (exactly one Manager). Its unit: unitId (a cached Organization unit), or the unit its section moved to; a section that has not moved yet may plan shifts without a unit. Nothing is granted until it is published.
         /// </summary>
         /// <returns>Created</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
@@ -1146,7 +1146,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Plans a shift with its rota (exactly one Manager) in a cached Organization unit: unitId, or the unit its section moved to. Nothing is granted until it is published.
+        /// Plans a shift with its rota (exactly one Manager). Its unit: unitId (a cached Organization unit), or the unit its section moved to; a section that has not moved yet may plan shifts without a unit. Nothing is granted until it is published.
         /// </summary>
         /// <returns>Created</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>

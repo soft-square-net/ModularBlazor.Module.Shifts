@@ -145,9 +145,14 @@ Settings (module settings, section `Shifts:Organization`):
 
 ### Shifts in units
 
-`Shift.UnitId` sits next to `SectionId`. A new shift (`POST /api/shifts/shifts`) needs a unit the module has cached and
-not seen removed. It is either `unitId` in the body, or, when that is left out, the unit its section moved to. Without
-either, the answer is 400. An update can give a unit to a shift that has none, but never moves a shift to another unit.
+`Shift.UnitId` sits next to `SectionId`. A new shift (`POST /api/shifts/shifts`) gets its unit as follows:
+
+| The shift's section | `unitId` left out | `unitId` given |
+| --- | --- | --- |
+| Has not moved yet | no unit (`UnitId` null, as before), so today's client keeps planning shifts | that unit, which must be cached and not removed (else 400) |
+| Has moved | the section's unit | the section's unit only (any other is 400) |
+
+An update can give a unit to a shift that has none, but never moves a shift to another unit.
 
 A published shift's grants are written on these scopes:
 

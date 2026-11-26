@@ -11,7 +11,7 @@ public sealed class AddShiftHandler(IRepository<Shift> shifts, IReadRepository<S
     {
         if (await sections.GetByIdAsync(command.SectionId, ct) is null) return SectionDto.NotFound<ShiftDto>(command.SectionId);
         var unit = await units.ResolveAsync(command.SectionId, command.UnitId, ct);
-        if (!unit.IsSuccess) return unit.As<Guid, ShiftDto>();
+        if (!unit.IsSuccess) return unit.As<Guid?, ShiftDto>();
 
         var shift = Shift.Create(command.SectionId, command.StartsAt, command.EndsAt, command.Rota.Select(r => (r.UserId, r.Role)), unit.Value);
         await shifts.AddAsync(shift, ct);

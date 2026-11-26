@@ -13,7 +13,7 @@ public sealed class UpdateShiftHandler(ShiftChanges changes, ShiftUnits units) :
             {
                 var unit = await units.ResolveAsync(shift.SectionId, command.UnitId, ct);
                 if (!unit.IsSuccess) return Result.Invalid([.. unit.ValidationErrors]); // ShiftUnits only refuses as Invalid
-                shift.MoveToUnit(unit.Value);
+                if (unit.Value is { } resolved) shift.MoveToUnit(resolved);
             }
             shift.Reschedule(command.StartsAt, command.EndsAt);
             shift.SetRota(command.Rota.Select(r => (r.UserId, r.Role)));
