@@ -119,7 +119,7 @@ public class ShiftUnitsHandle
         await _fixture.Units.ApplyAsync(State(SeoUnit()), Ct);
         var shift = ShiftBuilder.Planned(_fixture.Clock.Now.AddHours(1));
         _fixture.Stored(shift);
-        var update = new UpdateShiftHandler(_fixture.Changes, _fixture.ShiftUnits, _fixture.Rota, _fixture.Authority);
+        var update = new UpdateShiftHandler(_fixture.Changes, _fixture.ShiftUnits, _fixture.Rota, _fixture.Authority, _fixture.Notices);
         UpdateShiftCommand Command(Guid unitId) =>
             new(shift.Id, shift.SectionId!.Value, shift.StartsAt, shift.EndsAt, [new RotaEntry("m", "manager")], unitId);
 

@@ -1,6 +1,6 @@
 # ModularBlazor.Module.Shifts
 
-Shifts: newsroom sections and units, the rota (roles defined per tenant or unit), shift templates and check-out; the rota becomes time-windowed grants. It is a module of the [ModularBlazor](https://github.com/soft-square-net/ModularBlazor.Platform) platform, released on its own as the bundle `shifts`.
+Shifts: newsroom sections and units, the rota (roles defined per tenant or unit), shift templates, attendance (check-in, the shift clock, handover) and integration events; a check-in becomes time-windowed grants. It is a module of the [ModularBlazor](https://github.com/soft-square-net/ModularBlazor.Platform) platform, released on its own as the bundle `shifts`.
 
 > **Status: moved in.** The code moved here from the platform repo and builds against the platform packages.
 > Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
@@ -16,6 +16,7 @@ src/WebApi.Modules.Shifts.Core/             Core: aggregates (SectionAggregate, 
 src/WebApi.Modules.Shifts.UseCases/         use cases: one folder each, a Mediator command or query and its handler, returning an Ardalis Result
 src/WebApi.Modules.Shifts.Infrastructure/   data: ShiftsDbContext, entity configurations, tenant migrations per database provider; HTTP access to Organization
 src/WebApi.Modules.Shifts.Web/              entry assembly: IRuntimeModule, the Carter route table, one REPR endpoint class per route
+src/Shifts.Contracts/                       NuGet package: integration event types and records, ShiftSnapshot, live names
 src/WebApi.Modules.Shifts.Client/           typed API client (NSwag), shipped as a hidden client module
 src/Module.Shifts/                          Shifts Management: the Blazor client module (MudTail), loaded by ModularBlazor.BlzWebClient
 src/openapi/   the saved OpenAPI document the client is generated from
@@ -253,10 +254,99 @@ Its roles must hold for the unit and its default members must be members of it (
   `MembersOf`, read with the caller's token) at the shift's start, with an identity (`subject`, matched against the
   rota's user id). Without Organization configured, or when it does not answer, the change is refused with 503. A
   shift with no unit skips the check.
-- **Grants** are written when they were (on publish, and on every change to a published shift), with the permissions
-  of the role definitions.
+- **Grants** carry the permissions of the role definitions; since S3 they come from check-in (see below).
 
 The Blazor client still plans shifts by section; its role picker lists the definitions that hold (the new pages are S4).
+
+## Attendance, the shift clock and events (Shifts v2, step S3)
+
+### Check-in and status
+
+Every rota row has `checkedInAt`, `checkedOutAt` and `absentAt` (plus who did it, and whether the check-out was
+automatic). Its `status` is derived from them and the thresholds:
+
+| Status | When |
+| --- | --- |
+| `expected` | not checked in, not (yet) marked absent |
+| `present` | checked in by the start plus the late threshold |
+| `late` | checked in after the start plus the late threshold |
+| `absent` | not checked in by the start plus the absent threshold (the clock marks it) |
+| `left-early` | checked out by hand before the end |
+| `overtime` | checked out by hand, or still in, after the end plus the overtime threshold |
+
+- **Who.** A member checks themselves in (`POST /shifts/{id}/check-in`); the shift's lead or a manager (`shifts.manage`
+  on the unit) checks someone else in (`POST /shifts/{id}/members/{userId}/check-in`). Check-in needs a published shift
+  that has not ended, from the start minus the early threshold until the end. A member who checked out may check in
+  again before the end.
+- **Grants come only from check-in.** Publishing no longer gives the rota its rights: a member's grants
+  (`ReplaceSourceAsync("shift:{id}")`) run from `checkedInAt` to `checkedOutAt`, else to the end plus the check-out
+  grace. A check-out rewrites the source at once, so the host's live hub drops the member's shift topics. When the
+  module starts, the clock's first tick per tenant rewrites the grants of every published shift that has not ended, so
+  members who have not checked in lose the rights an older version wrote at publish.
+- **Thresholds (D5).** Module settings, overridable per unit: `EarlyCheckIn` 00:30, `LateAfter` 00:10, `AbsentAfter`
+  01:00, `OvertimeAfter` 00:15, and the existing `CheckoutGrace` 00:15. A shift takes each value from the nearest unit
+  up its path that sets it (`unit_attendance`), then (grace only) its section's grace, then the module setting.
+  `GET /units/{id}/attendance` shows a unit's overrides and what holds; `PUT` sets them (minutes, 0 to 1440, null to
+  inherit; `shifts.manage` on the unit) and rewrites the grants of the unit's shifts that have not ended.
+
+### The shift clock
+
+`ShiftClock` is a hosted service. Every `ClockInterval` (1 minute) it takes each active tenant whose module database
+is ready, takes the tenant database's try-lock `shifts:clock` (one pool instance per tenant does the work, the others
+skip it), and in a tenant scope:
+
+1. marks absences: members not checked in at the start plus the absent threshold (`absentAt` = that time);
+2. at the end plus the grace, checks everyone still in out automatically (at the end plus the grace) and ends the
+   shift: `checkedOutAt` = the end plus the grace (when the grants end), `endedAt` = the tick, `endedBy` =
+   `shifts:clock`; it publishes `shifts.checked-out.v1` per member and `shifts.ended.v1`.
+
+Every step looks at state, not at time passed since the last tick, so a tick that runs twice (or late) does nothing
+more. A shift checked out by hand (the lead, a manager or the workflow) is ended then, with `endedBy` the caller.
+
+### Handover
+
+The lead writes `handoverNote` (1 to 4000 characters) with `PUT /shifts/{id}/handover` `{ "note": "…" }`, on a
+published shift that has started; it is published as `shifts.handover.v1`.
+
+### Ended shifts
+
+`GET /shifts/ended?since={utc}&take=` (`shifts.manage`) lists the shifts that ended at or after `since`, ordered by
+`endedAt` (then id): `id`, `unitId`, `sectionId`, `startsAt`, `endsAt`, `endedAt`, `endedBy` (`shifts:clock` or a user
+id) and `checkedOutAt`. `take` is 200 by default, at most 500: poll with the last `endedAt` you saw. `/overdue` is
+unchanged.
+
+### Events (`Shifts.Contracts`)
+
+The module writes integration events to its outbox (saved with the change that caused them). The package
+`soft.square.net.Shifts.Contracts` (`src/Shifts.Contracts`, packed by `.github/workflows/packages.yml`, pushed on a
+`v*` tag) has the types, the records and `ShiftsLive`. The envelope's source is `shifts`, its subject `shift:{id}`
+(`section:{id}` for a section move), with the unit's path and the organisation id.
+
+| Type | Data | When |
+| --- | --- | --- |
+| `shifts.published.v1` | `ShiftPublished(shift)` | first publish |
+| `shifts.updated.v1` | `ShiftUpdated(shift)` | a change to a published shift |
+| `shifts.cancelled.v1` | `ShiftCancelled(shift, by, at)` | a published shift is deleted |
+| `shifts.member-added.v1` | `ShiftMemberAdded(shiftId, unitId, userId, roleKey, isLead)` | a rota row added to a published shift |
+| `shifts.member-removed.v1` | `ShiftMemberRemoved(…same…)` | a rota row removed from a published shift |
+| `shifts.checked-in.v1` | `ShiftCheckedIn(shiftId, unitId, userId, roleKeys, at, by, status)` | a check-in |
+| `shifts.checked-out.v1` | `ShiftCheckedOut(shiftId, unitId, userId, at, by, automatic, status)` | a member's check-out (by hand, with the shift, or by the clock) |
+| `shifts.handover.v1` | `ShiftHandover(shiftId, unitId, note, by, at)` | the lead writes the note |
+| `shifts.ended.v1` | `ShiftEnded(shift, by, at)` | the shift is checked out, by hand or by the clock |
+| `shifts.section-moved.v1` | `SectionMoved(sectionId, unitId)` | a section moved to an Organization unit |
+
+`shift` is a `ShiftSnapshot`: `shiftId`, `unitId`, `unitPath`, `sectionId`, `startsAt`, `endsAt`, `published`,
+`endedAt`, `handoverNote` and `members` (`userId`, `roleKey`, `isLead`, `checkedInAt`, `checkedOutAt`, `absentAt`,
+`status`). An absence has no event of its own: it is in the ended snapshot.
+
+### Live
+
+Every change sends `shift.changed` `{ shiftId }` on the topic `shifts:shift:{id}` and to the shift's unit
+(`PublishToUnitAsync(unitPath, …)`). The manifest declares the topic kind `shift` (`shifts.view`); its scope resolver
+gives the scopes of the shift's unit, so a grant on a Department covers its Sections' shifts.
+
+The shift page has check-in and check-out buttons (yours, and each member's for the lead or a manager), the attendance
+status of every row and the handover note.
 
 ## Developing
 

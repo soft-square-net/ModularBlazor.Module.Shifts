@@ -1,11 +1,14 @@
 using Ardalis.Specification;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using soft.square.net.WebApi.Contracts.Messaging;
 using soft.square.net.Organization.Contracts;
 using soft.square.net.WebApi.Modules.Shifts.Core.RoleAggregate;
 using soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate;
 using soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate;
 using soft.square.net.WebApi.Modules.Shifts.Core.UnitAggregate;
 using soft.square.net.WebApi.Modules.Shifts.UseCases;
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Attendance;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Authority;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Roles;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Shifts;
@@ -28,6 +31,14 @@ public sealed class ShiftsFixture
     /// <summary>The section-to-unit rows: none unless a test adds them.</summary>
     public IReadRepository<SectionUnitMap> Moved { get; } = Substitute.For<IReadRepository<SectionUnitMap>>();
     public IReadRepository<ShiftRoleDefinition> RoleReader { get; } = Substitute.For<IReadRepository<ShiftRoleDefinition>>();
+    /// <summary>The units' attendance overrides: none unless a test adds them to <see cref="AttendanceRows"/>.</summary>
+    public IReadRepository<UnitAttendance> AttendanceStore { get; } = Substitute.For<IReadRepository<UnitAttendance>>();
+    public List<UnitAttendance> AttendanceRows { get; } = [];
+    /// <summary>The module's settings (D5 defaults).</summary>
+    public ShiftOptions Options { get; } = new();
+    /// <summary>The outbox: every event a handler published.</summary>
+    public IIntegrationEvents Events { get; } = Substitute.For<IIntegrationEvents>();
+    public IShiftLive Live { get; } = Substitute.For<IShiftLive>();
     /// <summary>The tenant's role definitions (what <see cref="RoleReader"/> lists): the defaults unless a test changes them.</summary>
     public List<ShiftRoleDefinition> RoleRows { get; } = [.. DefaultShiftRoles.Create()];
     public IOrganizationAccess Organization { get; } = Substitute.For<IOrganizationAccess>();
@@ -45,6 +56,8 @@ public sealed class ShiftsFixture
     public ShiftChanges Changes { get; }
     public UnitCache Units { get; }
     public ShiftUnits ShiftUnits { get; }
+    public ShiftThresholds Thresholds { get; }
+    public ShiftNotices Notices { get; }
 
     /// <summary>The section every stored shift belongs to: two categories.</summary>
     public Section Section { get; } = Section.Create("Politics desk", ["politics", "economy"], null, null);
@@ -61,9 +74,13 @@ public sealed class ShiftsFixture
         Roles = new ShiftRoles(RoleReader, Units);
         UnitMembers = new UnitMembers(Organization, NullLogger<UnitMembers>.Instance);
         Rota = new ShiftRota(Roles, Units, UnitMembers);
-        ShiftGrants = new ShiftGrants(Grants, Units, Roles);
-        Details = new ShiftDetails(ShiftReader, SectionReader, Units, Caller);
-        Changes = new ShiftChanges(Shifts, SectionReader, ShiftGrants, Details);
+        Thresholds = new ShiftThresholds(AttendanceStore, Units, Microsoft.Extensions.Options.Options.Create(Options));
+        ShiftGrants = new ShiftGrants(Grants, Units, Roles, Thresholds);
+        Details = new ShiftDetails(ShiftReader, SectionReader, Units, Caller, Thresholds);
+        Notices = new ShiftNotices(Events, Live, Units, Thresholds, Caller);
+        Changes = new ShiftChanges(Shifts, SectionReader, ShiftGrants, Details, Notices);
+        AttendanceStore.ListAsync(Arg.Any<ISpecification<UnitAttendance>>(), Arg.Any<CancellationToken>())
+            .Returns(call => AttendanceRows.Where(r => call.Arg<ISpecification<UnitAttendance>>().IsSatisfiedBy(r)).ToList());
 
         SectionReader.FirstOrDefaultAsync(Arg.Any<ISpecification<Section>>(), Arg.Any<CancellationToken>()).Returns(Section);
         SectionReader.ListAsync(Arg.Any<ISpecification<Section>>(), Arg.Any<CancellationToken>()).Returns([Section]);
@@ -116,6 +133,14 @@ public sealed class ShiftsFixture
         list.Add(new DirectoryMemberDto(Guid.NewGuid(), Guid.NewGuid(), "https://id.test", subject, subject, unitId, null, null, [],
             from ?? TestClock.Start.AddYears(-1), to, true));
     }
+
+    /// <summary>The events published so far, in order: (type, data, subject, unit path).</summary>
+    public IReadOnlyList<(string Type, object Data, string Subject, string? UnitPath)> Published =>
+        [.. Events.ReceivedCalls().Where(c => c.GetMethodInfo().Name == nameof(IIntegrationEvents.Publish))
+            .Select(c => c.GetArguments()).Select(a => ((string)a[0]!, a[1]!, (string)a[2]!, (string?)a[3]))];
+
+    /// <summary>The data of the events of one type.</summary>
+    public IReadOnlyList<T> PublishedOf<T>(string type) => [.. Published.Where(e => e.Type == type).Select(e => (T)e.Data)];
 
     /// <summary>The grants last written for the shift's source.</summary>
     public IReadOnlyCollection<NewGrant> WrittenGrants(Shift shift) =>

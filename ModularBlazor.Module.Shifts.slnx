@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Module.Shifts/Module.Shifts.csproj" />
+    <Project Path="src/Shifts.Contracts/Shifts.Contracts.csproj" />
     <Project Path="src/WebApi.Modules.Shifts.Core/WebApi.Modules.Shifts.Core.csproj" />
     <Project Path="src/WebApi.Modules.Shifts.UseCases/WebApi.Modules.Shifts.UseCases.csproj" />
     <Project Path="src/WebApi.Modules.Shifts.Web/WebApi.Modules.Shifts.Web.csproj" />

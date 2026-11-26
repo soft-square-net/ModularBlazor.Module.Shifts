@@ -8,7 +8,7 @@ using soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data;
 
 #nullable disable
 
-namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.Oracle
+namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Migrations.Oracle
 {
     [DbContext(typeof(ShiftsDbContext))]
     partial class ShiftsDbContextModelSnapshot : ModelSnapshot
@@ -253,8 +253,26 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.O
                         .HasMaxLength(128)
                         .HasColumnType("NVARCHAR2(128)");
 
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<string>("EndedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("NVARCHAR2(128)");
+
                     b.Property<DateTimeOffset>("EndsAt")
                         .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<DateTimeOffset?>("HandoverAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<string>("HandoverBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("NVARCHAR2(128)");
+
+                    b.Property<string>("HandoverNote")
+                        .HasMaxLength(4000)
+                        .HasColumnType("NCLOB");
 
                     b.Property<bool>("Published")
                         .HasColumnType("BOOLEAN");
@@ -275,11 +293,15 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.O
 
                     b.HasKey("Id");
 
+                    b.HasIndex("EndedAt");
+
                     b.HasIndex("TenantId");
 
                     b.HasIndex("SectionId", "StartsAt");
 
                     b.HasIndex("UnitId", "StartsAt");
+
+                    b.HasIndex("Published", "CheckedOutAt", "StartsAt");
 
                     b.ToTable("shifts_shifts", (string)null);
                 });
@@ -292,8 +314,25 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.O
 
                     OraclePropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTimeOffset?>("AbsentAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<DateTimeOffset?>("CheckedInAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<string>("CheckedInBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("NVARCHAR2(128)");
+
                     b.Property<DateTimeOffset?>("CheckedOutAt")
                         .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<bool>("CheckedOutAutomatically")
+                        .HasColumnType("BOOLEAN");
+
+                    b.Property<string>("CheckedOutBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("NVARCHAR2(128)");
 
                     b.Property<bool>("IsLead")
                         .HasColumnType("BOOLEAN");
@@ -473,6 +512,46 @@ namespace soft.square.net.WebApi.Modules.Shifts.Infrastructure.Data.Migrations.O
                     b.HasIndex("TenantId");
 
                     b.ToTable("shifts_unit_cache", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.UnitAggregate.UnitAttendance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("RAW(16)");
+
+                    b.Property<int?>("AbsentMinutes")
+                        .HasColumnType("NUMBER(10)");
+
+                    b.Property<int?>("CheckoutGraceMinutes")
+                        .HasColumnType("NUMBER(10)");
+
+                    b.Property<int?>("EarlyCheckInMinutes")
+                        .HasColumnType("NUMBER(10)");
+
+                    b.Property<int?>("LateMinutes")
+                        .HasColumnType("NUMBER(10)");
+
+                    b.Property<int?>("OvertimeMinutes")
+                        .HasColumnType("NUMBER(10)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("NVARCHAR2(64)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("NVARCHAR2(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("shifts_unit_attendance", (string)null);
                 });
 
             modelBuilder.Entity("soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate.SectionCategory", b =>

@@ -57,6 +57,7 @@ public class ShiftScopesBuild
         await fixture.Units.ApplyAsync(State(SeoUnit()), Ct);
         var shift = Shift.Create(1, fixture.Clock.Now.AddHours(1), fixture.Clock.Now.AddHours(9), [ShiftBuilder.Lead(ShiftBuilder.Manager)], Department);
         shift.Publish();
+        ShiftBuilder.CheckEveryoneIn(shift, shift.StartsAt);
 
         await fixture.ShiftGrants.WriteAsync(shift, fixture.Section, Ct);
 
@@ -71,6 +72,7 @@ public class ShiftScopesBuild
         var fixture = new ShiftsFixture("admin-1");
         var shift = Shift.Create(1, fixture.Clock.Now.AddHours(1), fixture.Clock.Now.AddHours(9), [ShiftBuilder.Lead(ShiftBuilder.Manager)], Sport);
         shift.Publish();
+        ShiftBuilder.CheckEveryoneIn(shift, shift.StartsAt);
 
         await fixture.ShiftGrants.WriteAsync(shift, fixture.Section, Ct);
 

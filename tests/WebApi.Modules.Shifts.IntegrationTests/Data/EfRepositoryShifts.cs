@@ -75,14 +75,19 @@ public sealed class EfRepositoryShifts : IDisposable
             var shifts = new EfRepository<Shift>(context);
             var shift = await shifts.FirstOrDefaultAsync(new ShiftByIdSpec(saved.Id), Ct);
             shift!.SetRota([new("manager-1", "manager", true), new("editor-2", "editor", false)]);
-            shift.CheckOutMember("editor-2", Start.AddHours(2));
+            shift.Publish();
+            shift.CheckIn("editor-2", "editor-2", Start.AddMinutes(5), AttendanceThresholds.Default);
+            shift.CheckOutMember("editor-2", "editor-2", Start.AddHours(2));
+            shift.WriteHandover("manager-1", "All quiet.", Start.AddHours(2));
             await shifts.UpdateAsync(shift, Ct);
         }
 
         await using var reader = _database.For("acme");
         var reloaded = await new EfRepository<Shift>(reader).FirstOrDefaultAsync(new ShiftByIdSpec(saved.Id), Ct);
         reloaded!.Members.Select(m => m.UserId).ShouldBe(["manager-1", "editor-2"], ignoreOrder: true);
-        reloaded.Members.Single(m => m.UserId == "editor-2").CheckedOutAt.ShouldBe(Start.AddHours(2));
+        var editor = reloaded.Members.Single(m => m.UserId == "editor-2");
+        (editor.CheckedInAt, editor.CheckedInBy, editor.CheckedOutAt).ShouldBe((Start.AddMinutes(5), "editor-2", Start.AddHours(2)));
+        reloaded.HandoverNote.ShouldBe("All quiet.");
     }
 
     [Fact]

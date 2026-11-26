@@ -10,7 +10,15 @@ public sealed class ShiftConfiguration : IEntityTypeConfiguration<Shift>
     {
         shift.ToTable("shifts");
         shift.Property(s => s.CheckedOutBy).HasMaxLength(DataSchemaConstants.UserIdLength);
+        shift.Property(s => s.HandoverNote).HasMaxLength(Shift.HandoverNoteLength);
+        shift.Property(s => s.EndedBy).HasMaxLength(DataSchemaConstants.UserIdLength);
+        shift.HasIndex(s => s.EndedAt);
+        shift.Property(s => s.HandoverBy).HasMaxLength(DataSchemaConstants.UserIdLength);
         shift.Ignore(s => s.GrantSource);
+        shift.Ignore(s => s.Ended);
+        shift.Ignore(s => s.Rota);
+        // The clock's query: published shifts that have not ended, by start.
+        shift.HasIndex(s => new { s.Published, s.CheckedOutAt, s.StartsAt });
         shift.HasIndex(s => new { s.SectionId, s.StartsAt });
         shift.HasIndex(s => new { s.UnitId, s.StartsAt });
         shift.HasMany(s => s.Members).WithOne().HasForeignKey("ShiftId").OnDelete(DeleteBehavior.Cascade);

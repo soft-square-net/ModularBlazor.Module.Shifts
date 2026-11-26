@@ -1,32 +1,42 @@
 using soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate;
 using soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate;
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Attendance;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Roles;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Units;
 
 namespace soft.square.net.WebApi.Modules.Shifts.UseCases.Shifts;
 
 /// <summary>
-/// A published rota as grants in the host. Every change to a published shift (its rota, a check-out, its section's
-/// categories, its move to a unit, or a change to one of its roles' permissions) rewrites the shift's grants in one go: <see cref="IGrantStore.ReplaceSourceAsync"/>
-/// with source <c>shift:{id}</c>. Access then starts and ends on the clock: the host evaluates each grant's window per request.
+/// The checked-in members of a published shift as grants in the host. Every change to a published shift (a check-in or
+/// check-out, its rota, its end, its section's categories, its move to a unit, or a change to one of its roles'
+/// permissions) rewrites the shift's grants in one go: <see cref="IGrantStore.ReplaceSourceAsync"/> with source
+/// <c>shift:{id}</c>. Each write clears the users' cached rights on every replica, and the live hub drops the topics
+/// they may no longer receive (so a check-out revokes at once). Within a window, access starts and ends on the clock:
+/// the host evaluates each grant's window per request.
 /// </summary>
-public sealed class ShiftGrants(IGrantStore grants, UnitCache units, ShiftRoles roles)
+public sealed class ShiftGrants(IGrantStore grants, UnitCache units, ShiftRoles roles, ShiftThresholds thresholds)
 {
     /// <summary>
-    /// Each member's role permissions (from the role definition that holds for the shift's unit, read now) × the
-    /// shift's scopes (<see cref="ScopesAsync"/>), valid from the start to the member's end.
+    /// Each checked-in member's role permissions (from the role definition that holds for the shift's unit, read now)
+    /// × the shift's scopes (<see cref="ScopesAsync"/>), valid from their check-in to their check-out, or to the end plus
+    /// the check-out grace while they are in (<see cref="ShiftMember.AccessOn"/>). Nobody else gets a grant.
     /// </summary>
     public async Task WriteAsync(Shift shift, Section? section, CancellationToken ct)
     {
         if (!shift.Published) return;
-        var scopes = await ScopesAsync(shift, section, ct);
-        var set = await roles.ForUnitAsync(shift.UnitId, ct);
-        var rows = shift.Members
-            .Where(m => shift.EndOf(m) > shift.StartsAt)
-            .SelectMany(m => set.PermissionsOf(m.RoleKey).SelectMany(permission => scopes.Select(scope =>
-                new NewGrant(m.UserId, permission, scope, shift.StartsAt, shift.EndOf(m)))))
-            .Distinct()
-            .ToArray();
+        var grace = (await thresholds.ForAsync(shift, section, ct)).CheckoutGrace;
+        var windows = shift.Members.Select(m => (Member: m, Window: m.AccessOn(shift, grace))).Where(x => x.Window is not null).ToArray();
+        NewGrant[] rows = [];
+        if (windows.Length > 0)
+        {
+            var scopes = await ScopesAsync(shift, section, ct);
+            var set = await roles.ForUnitAsync(shift.UnitId, ct);
+            rows = windows
+                .SelectMany(x => set.PermissionsOf(x.Member.RoleKey).SelectMany(permission => scopes.Select(scope =>
+                    new NewGrant(x.Member.UserId, permission, scope, x.Window!.Value.From, x.Window.Value.To))))
+                .Distinct()
+                .ToArray();
+        }
         await grants.ReplaceSourceAsync(shift.GrantSource, rows, ct);
     }
 

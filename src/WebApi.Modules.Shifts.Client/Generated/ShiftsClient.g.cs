@@ -103,6 +103,22 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
+        /// A unit's own attendance overrides (null: inherited) and the effective thresholds (its ancestors', else the module's settings).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<UnitAttendanceDto> GetUnitAttendanceAsync(System.Guid id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Sets a unit's attendance overrides in minutes (early check-in, late, absent, overtime, check-out grace); null inherits.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<UnitAttendanceDto> SetUnitAttendanceAsync(System.Guid id, UnitAttendanceRequest body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
         /// Every rota role definition of the tenant: the tenant-wide ones (unitId null) and every unit's overrides.
         /// </summary>
         /// <returns>OK</returns>
@@ -194,6 +210,14 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
         System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<ShiftDto>> ListOverdueAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Shifts that ended (checked out as a whole, or by the clock) at or after since, ordered by the time they ended (for the workflow's handover).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<EndedShiftDto>> ListEndedAsync(System.DateTimeOffset since, int? take = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<ShiftDto>> ListShiftsAsync(int? sectionId = null, System.DateTimeOffset? from = null, System.DateTimeOffset? to = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
@@ -231,7 +255,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Writes the rota's grants: each member's role permissions on the section's categories, valid for the shift only.
+        /// Publishes the shift (shifts.published.v1): its members may now check in; each gets their role permissions from check-in to check-out.
         /// </summary>
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
@@ -239,7 +263,23 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Handover: the whole shift checks out and every member's grants end now (the shift's manager, or a shift admin).
+        /// The caller checks in to a shift of theirs: their grants start now (from the early check-in threshold before the start until the end).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<ShiftDto> CheckInAsync(int id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// The shift's lead or a manager of its unit checks a member in: the member's grants start now.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<ShiftDto> CheckInMemberAsync(int id, string userId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Handover: the whole shift checks out, everyone still in is checked out now and the shift ends (its lead, or a manager of its unit).
         /// </summary>
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
@@ -252,6 +292,14 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<ShiftDto> CheckOutMemberAsync(int id, string userId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// The shift's lead writes (or rewrites) the handover note, once the shift has started; published as shifts.handover.v1.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<ShiftDto> WriteHandoverAsync(int id, HandoverRequest body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
     }
 
@@ -961,6 +1009,171 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
                         if (status_ == 200)
                         {
                             var objectResponse_ = await ReadObjectResponseAsync<UnitResyncResult>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ShiftsApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new ShiftsApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// A unit's own attendance overrides (null: inherited) and the effective thresholds (its ancestors', else the module's settings).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<UnitAttendanceDto> GetUnitAttendanceAsync(System.Guid id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (id == null)
+                throw new System.ArgumentNullException("id");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/shifts/units/{id}/attendance"
+                    urlBuilder_.Append("api/shifts/units/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/attendance");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<UnitAttendanceDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ShiftsApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new ShiftsApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Sets a unit's attendance overrides in minutes (early check-in, late, absent, overtime, check-out grace); null inherits.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<UnitAttendanceDto> SetUnitAttendanceAsync(System.Guid id, UnitAttendanceRequest body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (id == null)
+                throw new System.ArgumentNullException("id");
+
+            if (body == null)
+                throw new System.ArgumentNullException("body");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    var json_ = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(body, JsonSerializerSettings);
+                    var content_ = new System.Net.Http.ByteArrayContent(json_);
+                    content_.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("application/json");
+                    request_.Content = content_;
+                    request_.Method = new System.Net.Http.HttpMethod("PUT");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/shifts/units/{id}/attendance"
+                    urlBuilder_.Append("api/shifts/units/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/attendance");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<UnitAttendanceDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ShiftsApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -1998,6 +2211,90 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
         }
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Shifts that ended (checked out as a whole, or by the clock) at or after since, ordered by the time they ended (for the workflow's handover).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<EndedShiftDto>> ListEndedAsync(System.DateTimeOffset since, int? take = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (since == null)
+                throw new System.ArgumentNullException("since");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/shifts/shifts/ended"
+                    urlBuilder_.Append("api/shifts/shifts/ended");
+                    urlBuilder_.Append('?');
+                    urlBuilder_.Append(System.Uri.EscapeDataString("since")).Append('=').Append(System.Uri.EscapeDataString(since.ToString("s", System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+                    if (take != null)
+                    {
+                        urlBuilder_.Append(System.Uri.EscapeDataString("take")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(take, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+                    }
+                    urlBuilder_.Length--;
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<System.Collections.Generic.IReadOnlyList<EndedShiftDto>>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ShiftsApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new ShiftsApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
         public virtual async System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<ShiftDto>> ListShiftsAsync(int? sectionId = null, System.DateTimeOffset? from = null, System.DateTimeOffset? to = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
@@ -2470,7 +2767,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Writes the rota's grants: each member's role permissions on the section's categories, valid for the shift only.
+        /// Publishes the shift (shifts.published.v1): its members may now check in; each gets their role permissions from check-in to check-out.
         /// </summary>
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
@@ -2550,7 +2847,172 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Handover: the whole shift checks out and every member's grants end now (the shift's manager, or a shift admin).
+        /// The caller checks in to a shift of theirs: their grants start now (from the early check-in threshold before the start until the end).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<ShiftDto> CheckInAsync(int id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (id == null)
+                throw new System.ArgumentNullException("id");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Content = new System.Net.Http.StringContent(string.Empty, System.Text.Encoding.UTF8, "application/json");
+                    request_.Method = new System.Net.Http.HttpMethod("POST");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/shifts/shifts/{id}/check-in"
+                    urlBuilder_.Append("api/shifts/shifts/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/check-in");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ShiftDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ShiftsApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new ShiftsApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// The shift's lead or a manager of its unit checks a member in: the member's grants start now.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<ShiftDto> CheckInMemberAsync(int id, string userId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (id == null)
+                throw new System.ArgumentNullException("id");
+
+            if (userId == null)
+                throw new System.ArgumentNullException("userId");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Content = new System.Net.Http.StringContent(string.Empty, System.Text.Encoding.UTF8, "application/json");
+                    request_.Method = new System.Net.Http.HttpMethod("POST");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/shifts/shifts/{id}/members/{userId}/check-in"
+                    urlBuilder_.Append("api/shifts/shifts/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/members/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(userId, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/check-in");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ShiftDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ShiftsApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new ShiftsApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Handover: the whole shift checks out, everyone still in is checked out now and the shift ends (its lead, or a manager of its unit).
         /// </summary>
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
@@ -2660,6 +3122,92 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
                     urlBuilder_.Append("/members/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(userId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/check-out");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ShiftDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ShiftsApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new ShiftsApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// The shift's lead writes (or rewrites) the handover note, once the shift has started; published as shifts.handover.v1.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<ShiftDto> WriteHandoverAsync(int id, HandoverRequest body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (id == null)
+                throw new System.ArgumentNullException("id");
+
+            if (body == null)
+                throw new System.ArgumentNullException("body");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    var json_ = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(body, JsonSerializerSettings);
+                    var content_ = new System.Net.Http.ByteArrayContent(json_);
+                    content_.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("application/json");
+                    request_.Content = content_;
+                    request_.Method = new System.Net.Http.HttpMethod("PUT");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/shifts/shifts/{id}/handover"
+                    urlBuilder_.Append("api/shifts/shifts/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/handover");
 
                     PrepareRequest(client_, request_, urlBuilder_);
 
@@ -2843,6 +3391,98 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class AttendanceThresholdsDto
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("earlyCheckInMinutes")]
+        public int EarlyCheckInMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("lateMinutes")]
+        public int LateMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("absentMinutes")]
+        public int AbsentMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("overtimeMinutes")]
+        public int OvertimeMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("checkoutGraceMinutes")]
+        public int CheckoutGraceMinutes { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class EndedShiftDto
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("id")]
+        public int Id { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("unitId")]
+        public System.Guid? UnitId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("sectionId")]
+        public int? SectionId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("startsAt")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.DateTimeOffset StartsAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("endsAt")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.DateTimeOffset EndsAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("endedAt")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.DateTimeOffset EndedAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("endedBy")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string EndedBy { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("checkedOutAt")]
+        public System.DateTimeOffset? CheckedOutAt { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class HandoverRequest
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("note")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string Note { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class MoveSectionsRequest
     {
 
@@ -3006,12 +3646,33 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
         [System.Text.Json.Serialization.JsonPropertyName("isLead")]
         public bool IsLead { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("status")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string Status { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("checkedInAt")]
+        public System.DateTimeOffset? CheckedInAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("checkedInBy")]
+        public string? CheckedInBy { get; set; } = default!;
+
         [System.Text.Json.Serialization.JsonPropertyName("checkedOutAt")]
         public System.DateTimeOffset? CheckedOutAt { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("checkedOutBy")]
+        public string? CheckedOutBy { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("checkedOutAutomatically")]
+        public bool CheckedOutAutomatically { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("absentAt")]
+        public System.DateTimeOffset? AbsentAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("accessFrom")]
+        public System.DateTimeOffset? AccessFrom { get; set; } = default!;
+
         [System.Text.Json.Serialization.JsonPropertyName("accessEnds")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public System.DateTimeOffset AccessEnds { get; set; } = default!;
+        public System.DateTimeOffset? AccessEnds { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -3427,6 +4088,32 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
         [System.Text.Json.Serialization.JsonPropertyName("unitId")]
         public System.Guid? UnitId { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("ended")]
+        public bool Ended { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("checkInOpensAt")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.DateTimeOffset CheckInOpensAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("handoverNote")]
+        public string? HandoverNote { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("handoverBy")]
+        public string? HandoverBy { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("handoverAt")]
+        public System.DateTimeOffset? HandoverAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("thresholds")]
+        [System.ComponentModel.DataAnnotations.Required]
+        public AttendanceThresholdsDto Thresholds { get; set; } = new AttendanceThresholdsDto();
+
+        [System.Text.Json.Serialization.JsonPropertyName("endedAt")]
+        public System.DateTimeOffset? EndedAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("endedBy")]
+        public string? EndedBy { get; set; } = default!;
+
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
         [System.Text.Json.Serialization.JsonExtensionData]
@@ -3628,6 +4315,74 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         [System.Text.Json.Serialization.JsonPropertyName("count")]
         public int Count { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class UnitAttendanceDto
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("unitId")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.Guid UnitId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("earlyCheckInMinutes")]
+        public int? EarlyCheckInMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("lateMinutes")]
+        public int? LateMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("absentMinutes")]
+        public int? AbsentMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("overtimeMinutes")]
+        public int? OvertimeMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("checkoutGraceMinutes")]
+        public int? CheckoutGraceMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("effective")]
+        [System.ComponentModel.DataAnnotations.Required]
+        public AttendanceThresholdsDto Effective { get; set; } = new AttendanceThresholdsDto();
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class UnitAttendanceRequest
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("earlyCheckInMinutes")]
+        public int? EarlyCheckInMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("lateMinutes")]
+        public int? LateMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("absentMinutes")]
+        public int? AbsentMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("overtimeMinutes")]
+        public int? OvertimeMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("checkoutGraceMinutes")]
+        public int? CheckoutGraceMinutes { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 

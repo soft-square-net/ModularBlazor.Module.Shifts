@@ -1,0 +1,69 @@
+# Packs the module's public contract as a NuGet package:
+#   - soft.square.net.Shifts.Contracts  (src/Shifts.Contracts: the shifts.* event records, ShiftSnapshot, live names)
+#
+#   - push to main / pull request:  <VersionPrefix>-ci.<run>  packed and kept as a workflow artifact, not published
+#   - tag v2.0.0-preview.1:          2.0.0-preview.1          published to GitHub Packages
+#
+# A tag must name the version in Directory.Build.props (v<VersionPrefix>-<VersionSuffix>), or the run fails before
+# anything is published. Published to https://nuget.pkg.github.com/soft-square-net/index.json with the workflow's own
+# token, only on a v* tag (the same pattern as the Organization repo's packages.yml).
+name: Packages
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    env:
+      # NuGet.Config reads the platform feed's token from here.
+      GITHUB_PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $project = (dotnet msbuild src/Shifts.Contracts -nologo -getProperty:Version).Trim()
+          $prefix = (dotnet msbuild src/Shifts.Contracts -nologo -getProperty:VersionPrefix).Trim()
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $version = $env:GITHUB_REF_NAME.Substring(1)
+            if ($version -ne $project) { throw "Tag $env:GITHUB_REF_NAME does not match the version in Directory.Build.props ($project): tag v$project, or raise the version first." }
+          } else {
+            $version = "$prefix-ci.$env:GITHUB_RUN_NUMBER"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $version (projects: $project)"
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          dotnet pack src/Shifts.Contracts -c Release -o artifacts/packages "-p:Version=${{ steps.version.outputs.version }}"
+          if ($LASTEXITCODE -ne 0) { throw "dotnet pack failed for src/Shifts.Contracts" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/packages/*
+
+      - name: Publish to GitHub Packages
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: >
+          dotnet nuget push "artifacts/packages/*.nupkg"
+          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          --api-key "${{ secrets.GITHUB_TOKEN }}"
+          --skip-duplicate

@@ -5,7 +5,7 @@
     Use cases: one folder per use case (Sections/Add, Shifts/Publish, Shifts/CheckOut, ...), each a Mediator command or
     query and its handler, returning an Ardalis Result. Also the module's permissions, settings, the rota's role
     templates and the DTOs.
-    References Core only. The Module SDK compiles it against WebApi.SharedKernel, WebApi.Contracts (IAccessScopes,
+    References Core and Shifts.Contracts (the event records it publishes). The Module SDK compiles it against WebApi.SharedKernel, WebApi.Contracts (IAccessScopes,
     IGrantStore, permissions) and ASP.NET Core, all provided by the host. Mediator.Abstractions and Ardalis.Result are
     private: copied into the module's output and loaded in its own load context, so they unload with it.
     The name does not end in .Application, so the layer is set here.
@@ -25,6 +25,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\WebApi.Modules.Shifts.Core\WebApi.Modules.Shifts.Core.csproj" />
+    <!-- The module's own public contract (shifts.* event records, live names), copied into the output like the packages. -->
+    <ProjectReference Include="..\Shifts.Contracts\Shifts.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

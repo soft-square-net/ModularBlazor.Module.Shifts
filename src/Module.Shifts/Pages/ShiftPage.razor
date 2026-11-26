@@ -3,7 +3,8 @@
 
 @*
   One shift: its facts and rota (GET /api/shifts/shifts/{id}), what automation applies to it (GET .../automation), and
-  the actions: publish (writes the rota's grants), check out the whole shift or one member, edit (PUT) and delete.
+  the actions: publish, check in (yourself, or a member as the lead or a manager: check-in is what writes a member's
+  grants), check out the whole shift or one member, the lead's handover note, edit (PUT) and delete.
 *@
 
 <PageHeader Title="@(_shift is null ? L["Shift #{0}", Id].Value : $"{L["Shift #{0}", _shift.Id]} · {_shift.Section}")" />
@@ -37,6 +38,14 @@
             <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="PublishAsync" disabled="@Busy">@L["Publish"]</button>
           }
           <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="OpenEdit" disabled="@Busy">@L["Edit"]</button>
+          @if (MyCheckIn)
+          {
+            <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="CheckInAsync" disabled="@Busy">@L["Check in"]</button>
+          }
+          @if (Mine is { CheckedInAt: not null, CheckedOutAt: null })
+          {
+            <button type="button" class="mud-button-root mud-button-outlined mud-button-secondary mud-button-medium" @onclick="() => CheckOutMemberAsync(Me!)" disabled="@Busy">@L["Check me out"]</button>
+          }
           @if (CanCheckOut)
           {
             <button type="button" class="mud-button-root mud-button-filled mud-button-secondary mud-button-medium" @onclick="CheckOutAsync" disabled="@Busy">@L["Check out shift"]</button>
@@ -83,17 +92,24 @@
         else
         {
           <table class="sh-table mud-typography-body2">
-            <thead><tr><th>@L["Member"]</th><th>@L["Role"]</th><th>@L["Access ends"]</th><th>@L["Checked out"]</th><th></th></tr></thead>
+            <thead><tr><th>@L["Member"]</th><th>@L["Role"]</th><th>@L["Attendance"]</th><th>@L["Checked in"]</th><th>@L["Checked out"]</th><th>@L["Access"]</th><th></th></tr></thead>
             <tbody>
               @foreach (var member in _shift.Rota)
               {
                 <tr>
                   <td>@Who(member.UserId)</td>
                   <td>@member.RoleKey@(member.IsLead ? " ★" : "")</td>
-                  <td>@(_shift.Published ? When(member.AccessEnds) : L["not published"])</td>
-                  <td>@When(member.CheckedOutAt)</td>
+                  <td><span class="sh-chip @AttendanceClass(member.Status)">@L[AttendanceText(member.Status)]</span></td>
+                  <td>@When(member.CheckedInAt)</td>
+                  <td>@When(member.CheckedOutAt)@(member.CheckedOutAutomatically ? $" ({L["automatic"]})" : "")</td>
+                  <td>@(!_shift.Published ? L["not published"] : member.AccessFrom is null ? L["after check-in"] : $"{When(member.AccessFrom)} → {When(member.AccessEnds)}")</td>
                   <td>
-                    @if (CanCheckOut && member.CheckedOutAt is null)
+                    @if (CheckInOpen && member.UserId != Me && (member.CheckedInAt is null || member.CheckedOutAt is not null))
+                    {
+                      <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small"
+                              @onclick="() => CheckInMemberAsync(member.UserId)" disabled="@Busy">@L["Check in"]</button>
+                    }
+                    @if (CanCheckOut && member.CheckedInAt is not null && member.CheckedOutAt is null)
                     {
                       <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small"
                               @onclick="() => CheckOutMemberAsync(member.UserId)" disabled="@Busy">@L["Check out"]</button>
@@ -119,7 +135,39 @@
             <dt>@L["Auto-assign after"]</dt><dd>@_automation.AutoAssignDelay</dd>
             <dt>@L["Check-out grace"]</dt><dd>@_automation.CheckoutGrace</dd>
           }
+          <dt>@L["Check-in opens"]</dt><dd>@When(_shift.CheckInOpensAt)</dd>
+          <dt>@L["Late after"]</dt><dd>@L["{0} min", _shift.Thresholds.LateMinutes]</dd>
+          <dt>@L["Absent after"]</dt><dd>@L["{0} min", _shift.Thresholds.AbsentMinutes]</dd>
+          @if (_shift.EndedAt is not null)
+          {
+            <dt>@L["Ended"]</dt><dd>@When(_shift.EndedAt) · @Who(_shift.EndedBy)</dd>
+          }
         </dl>
+      </section>
+
+      <section class="mud-paper mud-elevation-1 sh-card">
+        <h2 class="mud-typography mud-typography-h6">@L["Handover"]</h2>
+        @if (_handover is not null)
+        {
+          <textarea class="sh-handover" rows="5" maxlength="4000" @bind="_handover" disabled="@Busy"></textarea>
+          <div class="sh-actions">
+            <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-small" @onclick="SaveHandoverAsync" disabled="@(Busy || string.IsNullOrWhiteSpace(_handover))">@L["Save note"]</button>
+            <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-small" @onclick="() => _handover = null">@L["Keep it"]</button>
+          </div>
+        }
+        else if (_shift.HandoverNote is { Length: > 0 } note)
+        {
+          <p class="mud-typography mud-typography-body2 sh-note">@note</p>
+          <p class="mud-typography mud-typography-caption sh-muted">@When(_shift.HandoverAt) · @Who(_shift.HandoverBy)</p>
+        }
+        else
+        {
+          <p class="mud-typography mud-typography-body2 sh-muted">@L["No handover note yet."]</p>
+        }
+        @if (_handover is null && IAmLead && _shift.Published && _shift.StartsAt <= DateTimeOffset.UtcNow)
+        {
+          <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => _handover = _shift.HandoverNote ?? string.Empty" disabled="@Busy">@L["Write the handover"]</button>
+        }
       </section>
     </div>
   }
@@ -136,9 +184,41 @@
   private List<RoleDefinitionDto> _roles = [];
   private ShiftForm? _form;
   private bool _confirmDelete;
+  private string? _handover;
 
   /// <summary>Check-out is for a published shift that has started (running or overdue) and is not checked out.</summary>
   private bool CanCheckOut => _shift is { Published: true, CheckedOutAt: null } && _shift.StartsAt <= DateTimeOffset.UtcNow;
+
+  /// <summary>The signed-in user's row on the rota (the first, when they hold more than one role).</summary>
+  private RotaMemberDto? Mine => _shift?.Rota.FirstOrDefault(m => m.UserId == Me);
+
+  private bool IAmLead => _shift?.Rota.Any(m => m.UserId == Me && m.IsLead) == true;
+
+  /// <summary>
+  /// Check-in opens before the start (the early threshold) and closes at the end. Anyone on the rota checks themselves in;
+  /// the lead or a manager checks others in (the API refuses anyone else).
+  /// </summary>
+  private bool CheckInOpen => _shift is { Published: true, Ended: false } && _shift.CheckInOpensAt <= DateTimeOffset.UtcNow
+                              && DateTimeOffset.UtcNow < _shift.EndsAt;
+
+  private bool MyCheckIn => CheckInOpen && Mine is { } me && (me.CheckedInAt is null || me.CheckedOutAt is not null);
+
+  private static string AttendanceText(string status) => status switch
+  {
+    "present" => "Present",
+    "late" => "Late",
+    "absent" => "Absent",
+    "left-early" => "Left early",
+    "overtime" => "Overtime",
+    _ => "Expected"
+  };
+
+  private static string AttendanceClass(string status) => status switch
+  {
+    "present" or "overtime" => "sh-chip-on",
+    "late" or "left-early" or "absent" => "sh-chip-warn",
+    _ => ""
+  };
 
   protected override async Task OnAfterRenderAsync(bool firstRender)
   {
@@ -164,6 +244,17 @@
   }
 
   private Task PublishAsync() => ChangeAsync(api => api.PublishShiftAsync(Id), "Published: the rota's grants are written.");
+
+  private Task CheckInAsync() => ChangeAsync(api => api.CheckInAsync(Id), "Checked in: your shift rights start now.");
+
+  private Task CheckInMemberAsync(string userId) =>
+    ChangeAsync(api => api.CheckInMemberAsync(Id, userId), L["{0} checked in.", Who(userId)]);
+
+  private async Task SaveHandoverAsync()
+  {
+    await ChangeAsync(api => api.WriteHandoverAsync(Id, new HandoverRequest { Note = _handover! }), "Handover note saved.");
+    if (Error is null) _handover = null;
+  }
 
   private Task CheckOutAsync() => ChangeAsync(api => api.CheckOutShiftAsync(Id), "Shift checked out: its grants end now.");
 

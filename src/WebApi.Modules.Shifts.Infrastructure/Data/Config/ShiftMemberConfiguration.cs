@@ -12,6 +12,9 @@ public sealed class ShiftMemberConfiguration : IEntityTypeConfiguration<ShiftMem
         member.ToTable("shift_members");
         member.Property(m => m.UserId).HasMaxLength(DataSchemaConstants.UserIdLength);
         member.Property(m => m.RoleKey).HasMaxLength(ShiftRoleDefinition.KeyLength);
+        member.Property(m => m.CheckedInBy).HasMaxLength(DataSchemaConstants.UserIdLength);
+        member.Property(m => m.CheckedOutBy).HasMaxLength(DataSchemaConstants.UserIdLength);
+        member.Ignore(m => m.IsIn);
         member.HasIndex(m => m.UserId);
     }
 }

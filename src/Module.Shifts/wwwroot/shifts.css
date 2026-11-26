@@ -35,3 +35,5 @@
 .sh-columns { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 .sh-list { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .sh-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.sh-note { white-space: pre-wrap; margin: 0 0 .25rem; }
+.sh-handover { width: 100%; box-sizing: border-box; font: inherit; padding: .5rem; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius); background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); }

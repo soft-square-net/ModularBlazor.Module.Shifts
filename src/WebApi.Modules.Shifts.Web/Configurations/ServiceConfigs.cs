@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using soft.square.net.WebApi.Modules.Shifts.Infrastructure;
 using soft.square.net.WebApi.Modules.Shifts.Infrastructure.Organization;
+using soft.square.net.WebApi.Modules.Shifts.UseCases.Attendance;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Authority;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Roles;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Templates;
@@ -33,6 +34,11 @@ public static class ServiceConfigs
         services.AddScoped<ShiftChanges>();
         services.AddScoped<ShiftUnits>();
         services.AddScoped<ShiftAuthority>();
+        services.AddScoped<ShiftNotices>();
+
+        // Attendance: thresholds (module settings, unit overrides) and the clock's tick.
+        services.AddScoped<ShiftThresholds>();
+        services.AddScoped<ShiftClockRun>();
 
         // Roles as data, the rota's checks, and templates.
         services.AddScoped<ShiftRoles>();
