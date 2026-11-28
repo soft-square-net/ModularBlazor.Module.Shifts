@@ -1,0 +1,69 @@
+@using soft.square.net.Module.Shifts.Model
+@inject IStringLocalizerFactory Texts
+
+@*
+  A unit of the tenant's Organization tree, from the module's cache (GET /api/shifts/units): the units indented in tree
+  order with their type, like the Organization module's "Move to…" list. The value is the unit's id, "" for the
+  placeholder, or NoneValue for the extra choice a page may offer.
+*@
+
+<div class="mud-input-control @Class">
+  <label class="mud-input-label" for="@Id">@(Label ?? L["Unit"])</label>
+  <div class="mud-input-wrapper mud-input-wrapper--select @(Dense ? "mud-input-wrapper--dense" : "")">
+    <select id="@Id" class="mud-input-slot" value="@Value" disabled="@Disabled" @onchange="e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)">
+      @if (Placeholder is not null)
+      {
+        <option value="" selected="@(Value.Length == 0)">@Placeholder</option>
+      }
+      @if (NoneText is not null)
+      {
+        <option value="@NoneValue" selected="@(Value == NoneValue)">@NoneText</option>
+      }
+      @foreach (var node in Tree.All())
+      {
+        var id = node.Unit.Id.ToString();
+        <option value="@id" selected="@(Value == id)" disabled="@(Selectable is not null && !Selectable(node.Unit))">@(new string(' ', node.Level * 3))@UnitTree.NameOf(node.Unit, Arabic) · @TypeName(node.Unit.TypeKey)</option>
+      }
+    </select>
+  </div>
+  @if (Help is not null)
+  {
+    <div class="mud-input-helper-text">@Help</div>
+  }
+</div>
+
+@code {
+  public const string NoneValue = "none";
+
+  [Parameter, EditorRequired] public UnitTree Tree { get; set; } = UnitTree.Empty;
+  [Parameter] public string Value { get; set; } = "";
+  [Parameter] public EventCallback<string> ValueChanged { get; set; }
+  [Parameter] public string Id { get; set; } = "sh-unit";
+  [Parameter] public string? Label { get; set; }
+  [Parameter] public string? Placeholder { get; set; }
+  /// <summary>The text of an extra first choice with the value <see cref="NoneValue"/>.</summary>
+  [Parameter] public string? NoneText { get; set; }
+  [Parameter] public string? Help { get; set; }
+  [Parameter] public string? Class { get; set; }
+  [Parameter] public bool Dense { get; set; }
+  [Parameter] public bool Disabled { get; set; }
+  /// <summary>Which units can be chosen; the others stay listed, so the tree reads whole.</summary>
+  [Parameter] public Func<soft.square.net.WebApi.Modules.Shifts.Client.UnitDto, bool>? Selectable { get; set; }
+
+  private IStringLocalizer? _l;
+  private IStringLocalizer L => _l ??= Texts.Create(typeof(ShiftsPageBase));
+
+  private static bool Arabic => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
+  private string TypeName(string key) => key switch
+  {
+    "org" => L["Organization"],
+    "sector" => L["Sector"],
+    UnitTree.DepartmentType => L["Department"],
+    UnitTree.SectionType => L["Section"],
+    _ => key
+  };
+
+  /// <summary>The id a picker's value stands for; null for the placeholder and the extra choice.</summary>
+  public static Guid? Parse(string? value) => Guid.TryParse(value, out var id) ? id : null;
+}

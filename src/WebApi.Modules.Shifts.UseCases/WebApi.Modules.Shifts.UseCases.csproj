@@ -2,7 +2,7 @@
   <Sdk Name="soft.square.net.ModularBlazor.Module.Sdk" />
 
   <!--
-    Use cases: one folder per use case (Sections/Add, Shifts/Publish, Shifts/CheckOut, ...), each a Mediator command or
+    Use cases: one folder per use case (Shifts/Add, Shifts/Publish, Shifts/CheckOut, ...), each a Mediator command or
     query and its handler, returning an Ardalis Result. Also the module's permissions, settings, the rota's role
     templates and the DTOs.
     References Core and Shifts.Contracts (the event records it publishes). The Module SDK compiles it against WebApi.SharedKernel, WebApi.Contracts (IAccessScopes,

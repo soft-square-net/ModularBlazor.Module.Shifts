@@ -2,9 +2,6 @@ using Ardalis.Specification;
 using soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate;
 using soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate;
 using soft.square.net.WebApi.Modules.Shifts.UnitTests.Core.ShiftAggregate;
-using soft.square.net.WebApi.Modules.Shifts.UseCases.Sections;
-using soft.square.net.WebApi.Modules.Shifts.UseCases.Sections.Add;
-using soft.square.net.WebApi.Modules.Shifts.UseCases.Sections.Update;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Shifts;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Shifts.Add;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Shifts.Update;
@@ -14,7 +11,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.UnitTests.UseCases.Shifts;
 
 /// <summary>
 /// A shift's unit during the move: optional on a section that has not moved, the section's unit (and no other) once it
-/// has, always a cached one when named; the sections are read-only once moved.
+/// has, always a cached one when named; required (and enough on its own) for a shift planned with no section.
 /// </summary>
 public class ShiftUnitsHandle
 {
@@ -128,20 +125,48 @@ public class ShiftUnitsHandle
         shift.UnitId.ShouldBe(Sport);
     }
 
+    private Task<Result<ShiftDto>> AddForUnit(Guid? unitId) => _add.Handle(new AddShiftCommand(null, _fixture.Clock.Now.AddHours(1),
+        _fixture.Clock.Now.AddHours(9), [new RotaEntry("m", "manager")], unitId), Ct).AsTask();
+
     [Fact]
-    public async Task SectionsAreReadOnlyOnceMoved()
+    public async Task AShiftIsPlannedForAUnitAlone()
     {
-        _fixture.Moved.AnyAsync(Arg.Any<CancellationToken>()).Returns(true);
-        var sections = Substitute.For<IRepository<Section>>();
+        await _fixture.Units.ApplyAsync(State(SportUnit()), Ct);
 
-        var added = await new AddSectionHandler(sections, _fixture.Moved, _fixture.Authority).Handle(new AddSectionCommand("Sport", ["sport"], null, null), Ct);
-        var updated = await new UpdateSectionHandler(sections, _fixture.ShiftReader, _fixture.Moved, _fixture.ShiftGrants, _fixture.Caller, _fixture.Authority)
-            .Handle(new UpdateSectionCommand(1, "Sport", ["sport"], null, null), Ct);
+        var result = await AddForUnit(Sport);
 
-        added.Status.ShouldBe(ResultStatus.Conflict);
-        updated.Status.ShouldBe(ResultStatus.Conflict);
-        added.Errors.ShouldBe([SectionDto.MovedToOrganization]);
-        await sections.DidNotReceiveWithAnyArgs().AddAsync(default!, Ct);
-        await sections.DidNotReceiveWithAnyArgs().UpdateAsync(default!, Ct);
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.UnitId.ShouldBe(Sport);
+        result.Value.SectionId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task AShiftForAUnitTakesTheSectionThatMovedThere()
+    {
+        await _fixture.Units.ApplyAsync(State(SportUnit()), Ct);
+        _fixture.Moved.ListAsync(Arg.Any<ISpecification<SectionUnitMap>>(), Arg.Any<CancellationToken>())
+            .Returns([new SectionUnitMap(1, Sport, _fixture.Clock.Now, "admin-1")]);
+
+        (await AddForUnit(Sport)).Value.SectionId.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task AShiftWithNeitherSectionNorUnitIsRefused()
+    {
+        (await AddForUnit(null)).Status.ShouldBe(ResultStatus.Invalid);
+        await _fixture.Shifts.DidNotReceiveWithAnyArgs().AddAsync(default!, Ct);
+    }
+
+    [Fact]
+    public async Task AnUpdateWithoutASectionKeepsTheShiftsSection()
+    {
+        var shift = ShiftBuilder.Planned(_fixture.Clock.Now.AddHours(1));
+        _fixture.Stored(shift);
+        var update = new UpdateShiftHandler(_fixture.Changes, _fixture.ShiftUnits, _fixture.Rota, _fixture.Authority, _fixture.Notices);
+
+        var result = await update.Handle(new UpdateShiftCommand(shift.Id, null, shift.StartsAt, shift.EndsAt, [new RotaEntry("m", "manager")]), Ct);
+
+        result.IsSuccess.ShouldBeTrue();
+        shift.SectionId.ShouldBe(1);
     }
 }

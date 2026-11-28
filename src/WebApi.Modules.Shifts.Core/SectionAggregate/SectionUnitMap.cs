@@ -2,7 +2,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate;
 
 /// <summary>
 /// A section moved to Organization: the Section unit that replaces it (table <c>section_unit_map</c>, one row per
-/// section). Written by "Move sections to Organization"; once a tenant has any, its sections are read-only.
+/// section). Written by "Move sections to Organization"; a moved section's shifts are granted on its unit instead of on <c>section:{int}</c>.
 /// </summary>
 public sealed class SectionUnitMap : AggregateRoot<int>, ITenantOwned
 {

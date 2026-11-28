@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Unit tests of the Shifts client module's code (Module.Shifts): the unit tree, time-zone and week maths, shift and
+       attendance rules, the forms, the live subscriptions, and the translations and RTL-safe styles.
+       No browser, no host. -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- What the host provides to client modules: the client SDK and the WebAssembly authentication package. -->
+  <ItemGroup>
+    <PackageReference Include="soft.square.net.ModularBlazor.Abstractions" Version="$(ModularBlazorPlatformVersion)" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" Version="10.0.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Module.Shifts\Module.Shifts.csproj" />
+    <ProjectReference Include="..\..\src\WebApi.Modules.Shifts.Client\WebApi.Modules.Shifts.Client.csproj" />
+  </ItemGroup>
+
+</Project>

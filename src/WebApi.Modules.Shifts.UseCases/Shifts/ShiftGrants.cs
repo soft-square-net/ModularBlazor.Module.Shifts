@@ -1,4 +1,5 @@
 using soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate;
+using soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate.Specifications;
 using soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Attendance;
 using soft.square.net.WebApi.Modules.Shifts.UseCases.Roles;
@@ -14,7 +15,8 @@ namespace soft.square.net.WebApi.Modules.Shifts.UseCases.Shifts;
 /// they may no longer receive (so a check-out revokes at once). Within a window, access starts and ends on the clock:
 /// the host evaluates each grant's window per request.
 /// </summary>
-public sealed class ShiftGrants(IGrantStore grants, UnitCache units, ShiftRoles roles, ShiftThresholds thresholds)
+public sealed class ShiftGrants(IGrantStore grants, UnitCache units, ShiftRoles roles, ShiftThresholds thresholds,
+    IReadRepository<SectionUnitMap> maps)
 {
     /// <summary>
     /// Each checked-in member's role permissions (from the role definition that holds for the shift's unit, read now)
@@ -41,13 +43,17 @@ public sealed class ShiftGrants(IGrantStore grants, UnitCache units, ShiftRoles 
     }
 
     /// <summary>
-    /// The shift's unit scopes (<see cref="ShiftScopes.For"/>) when its unit is cached, plus its section's; only the
-    /// section's for a shift that has no unit yet (or whose unit Organization removed).
+    /// The shift's unit scopes (<see cref="ShiftScopes.For"/>) when its unit is cached, plus its section's (without the
+    /// legacy <c>section:{sectionId}</c> once the section has moved); only the section's, all of them, for a shift that
+    /// has no unit yet (or whose unit Organization removed), so such a shift never ends up with no scope.
     /// </summary>
     public async Task<IReadOnlyList<string>> ScopesAsync(Shift shift, Section? section, CancellationToken ct)
     {
         if (shift.UnitId is { } unitId && await units.FindAsync(unitId, ct) is { } unit)
-            return ShiftScopes.For(unit, await units.CategoriesOfAsync(unit, ct), section);
+        {
+            var moved = section is not null && await maps.FirstOrDefaultAsync(new SectionUnitMapsSpec(section.Id), ct) is not null;
+            return ShiftScopes.For(unit, await units.CategoriesOfAsync(unit, ct), section, moved);
+        }
         return section?.Scopes ?? [];
     }
 

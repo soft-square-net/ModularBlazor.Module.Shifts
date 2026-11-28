@@ -21,8 +21,6 @@ public sealed class ShiftsRoutes : ICarterModule
 
         Sections.List.Map(shifts);
         Sections.ListServing.Map(shifts);
-        Sections.Add.Map(shifts);
-        Sections.Update.Map(shifts);
         Sections.GetSettings.Map(shifts);
         Sections.Export.Map(shifts);
         Sections.MoveToOrganization.Map(shifts);

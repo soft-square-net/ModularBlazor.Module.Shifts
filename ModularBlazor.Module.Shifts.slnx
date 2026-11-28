@@ -7,6 +7,7 @@
     <Project Path="src/WebApi.Modules.Shifts.Web/WebApi.Modules.Shifts.Web.csproj" />
   </Folder>
   <Folder Name="/test/" Id="0ab3bf05-4346-4aa6-1389-037be0695223">
+    <Project Path="tests/Module.Shifts.Tests/Module.Shifts.Tests.csproj" />
     <Project Path="tests/WebApi.Modules.Shifts.IntegrationTests/WebApi.Modules.Shifts.IntegrationTests.csproj" />
     <Project Path="tests/WebApi.Modules.Shifts.UnitTests/WebApi.Modules.Shifts.UnitTests.csproj" />
   </Folder>

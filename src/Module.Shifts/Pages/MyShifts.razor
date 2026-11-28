@@ -1,0 +1,118 @@
+@page "/shifts/mine"
+@inherits ShiftsPageBase
+
+@*
+  My shifts (GET /api/shifts/shifts/mine): each on its unit's clock, with the buttons to check in and to check out.
+  Live: each listed shift's topic.
+*@
+
+<PageHeader Title="@L["My shifts"]" />
+
+<div class="mud-container sh-page">
+  <ShiftsNav Current="mine" />
+
+  <header class="sh-header">
+    <p class="sh-muted">@L["The shifts you are on. Checking in starts your shift rights."]</p>
+    <div class="sh-actions">
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="LoadAsync" disabled="@Busy">@L["Refresh"]</button>
+    </div>
+  </header>
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 sh-error" role="alert" dir="auto">@Error</p>
+  }
+
+  @if (_shifts is null)
+  {
+    <p class="sh-muted">@L["Loading…"]</p>
+  }
+  else if (_shifts.Count == 0)
+  {
+    <p class="sh-muted">@L["You are on no shift that is current or ahead."]</p>
+  }
+  else
+  {
+    <div class="sh-cards">
+      @foreach (var shift in _shifts)
+      {
+        var now = DateTimeOffset.UtcNow;
+        var clock = ClockOf(shift.UnitId);
+        var status = ShiftState.Status(shift, now);
+        <section class="mud-paper mud-elevation-1 sh-card" @key="shift.Id">
+          <div class="sh-card-head">
+            <a class="mud-typography mud-typography-subtitle1" href="shifts/@shift.Id">@L["Shift #{0}", shift.Id] · @PlaceOf(shift)</a>
+            <span class="sh-chip @ShiftState.StatusClass(status)">@L[status]</span>
+          </div>
+          <p>
+            <bdi dir="ltr">@ZoneTime.Date(ZoneTime.DateOf(shift.StartsAt, clock.Zone)) · @ZoneTime.Range(shift.StartsAt, shift.EndsAt, clock.Zone)</bdi>
+            <span class="sh-muted">@clock.Name</span>
+          </p>
+          @foreach (var mine in shift.Rota.Where(m => m.UserId == Me))
+          {
+            <p class="sh-line">
+              <span class="sh-chip @ShiftState.AttendanceClass(mine.Status)">@L[ShiftState.AttendanceText(mine.Status)]</span>
+              <span>@RoleChoices.Name([], mine.RoleKey, Arabic, key => L[key])</span>
+              @if (mine.CheckedInAt is { } inAt)
+              {
+                <span class="sh-muted">@L["Checked in"]: <bdi dir="ltr">@ZoneTime.Stamp(inAt, clock.Zone)</bdi></span>
+              }
+            </p>
+          }
+          <div class="sh-actions">
+            @if (ShiftState.CanCheckIn(shift, Me, now))
+            {
+              <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="() => CheckInAsync(shift.Id)" disabled="@Busy">@L["Check in"]</button>
+            }
+            else if (shift is { Published: true, Ended: false } && now < shift.CheckInOpensAt)
+            {
+              <span class="sh-muted">@L["Check-in opens"]: <bdi dir="ltr">@ZoneTime.Stamp(shift.CheckInOpensAt, clock.Zone)</bdi></span>
+            }
+            @if (ShiftState.CanCheckOut(shift, Me))
+            {
+              <button type="button" class="mud-button-root mud-button-outlined mud-button-secondary mud-button-medium" @onclick="() => CheckOutAsync(shift.Id)" disabled="@Busy">@L["Check me out"]</button>
+            }
+          </div>
+        </section>
+      }
+    </div>
+  }
+</div>
+
+@code {
+  private List<ShiftDto>? _shifts;
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (firstRender) await LoadAsync();
+  }
+
+  private Task LoadAsync() => RunAsync(async () =>
+  {
+    await LoadUnitsAsync();
+    await LoadShiftsAsync();
+  }, toast: false);
+
+  private async Task LoadShiftsAsync()
+  {
+    _shifts = (await Api.ListMineAsync()).OrderBy(s => s.StartsAt).ToList();
+    await Live.SetAsync(_shifts.Select(s => ShiftLiveTopics.Shift(s.Id)));
+  }
+
+  protected override Task OnShiftChangedAsync() => QuietlyAsync(LoadShiftsAsync);
+
+  private string PlaceOf(ShiftDto shift) =>
+    shift.UnitId is { } id && Units.Find(id) is not null ? UnitName(id) : shift.Section;
+
+  private Task CheckInAsync(int id) => RunAsync(async () =>
+  {
+    await Api.CheckInAsync(id);
+    await MudTail.ToastAsync(L["Checked in: your shift rights start now."], "success");
+  }, () => QuietlyAsync(LoadShiftsAsync));
+
+  private Task CheckOutAsync(int id) => RunAsync(async () =>
+  {
+    await Api.CheckOutMemberAsync(id, Me!);
+    await MudTail.ToastAsync(L["{0} checked out.", Who(Me)], "success");
+  }, () => QuietlyAsync(LoadShiftsAsync));
+}

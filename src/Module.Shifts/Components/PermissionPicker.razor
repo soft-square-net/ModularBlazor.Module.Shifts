@@ -1,0 +1,109 @@
+@using System.Net.Http
+@using soft.square.net.Module.Shifts.Model
+@using soft.square.net.ModularBlazor.Abstractions
+@inject IHttpClientFactory HttpClients
+@inject IStringLocalizerFactory Texts
+
+@*
+  The permissions a role grants, picked from the platform's catalog. The catalog needs access.grants.manage: without
+  it the picker takes typed names, and the API checks them.
+*@
+
+<fieldset class="sh-permissions">
+  <legend>@L["Permissions"]</legend>
+
+  <div class="sh-chips">
+    @foreach (var name in Selected.ToList())
+    {
+      <button type="button" class="sh-chip sh-chip-on" @key="name" @onclick="() => Toggle(name, false)" title="@L["Remove"]" aria-label="@L["Remove {0}", name]">
+        <bdi dir="ltr">@name</bdi> ×
+      </button>
+    }
+    @if (Selected.Count == 0)
+    {
+      <span class="sh-muted">@L["No permissions: the role is a label on the rota only."]</span>
+    }
+  </div>
+
+  @if (_catalog is { Count: > 0 })
+  {
+    <div class="mud-input-control">
+      <label class="mud-input-label" for="@(Id)-filter">@L["Filter the catalog"]</label>
+      <div class="mud-input-wrapper"><input id="@(Id)-filter" class="mud-input-slot" type="search" dir="ltr" @bind="_filter" @bind:event="oninput" /></div>
+    </div>
+    <div class="sh-catalog">
+      @foreach (var group in _catalog)
+      {
+        var matches = group.Permissions.Where(Matches).ToList();
+        if (matches.Count > 0)
+        {
+          <div class="sh-catalog-group" @key="group.ModuleId">
+            <strong>@group.ModuleName</strong>
+            @foreach (var permission in matches)
+            {
+              <label class="sh-check">
+                <input type="checkbox" checked="@Selected.Contains(permission.Name)" @onchange="e => Toggle(permission.Name, e.Value is true)" />
+                <span><bdi dir="ltr">@permission.Name</bdi>@if (permission.Description is not null) {<span class="sh-muted"> — @permission.Description</span>}</span>
+              </label>
+            }
+          </div>
+        }
+      }
+    </div>
+  }
+  else if (_catalog is not null)
+  {
+    <p class="sh-muted">@L["The permission catalog cannot be read with your permissions: type the names. The API checks them."]</p>
+  }
+
+  <div class="sh-rota-row sh-typed">
+    <input class="mud-input-slot" aria-label="@L["Permission name"]" placeholder="shifts.view" dir="ltr" @bind="_typed" @bind:event="oninput" />
+    <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" disabled="@(!PermissionCatalog.IsValidName(_typed.Trim()))" @onclick="AddTyped">@L["Add"]</button>
+  </div>
+</fieldset>
+
+@code {
+  /// <summary>The picked names; the picker changes this collection in place.</summary>
+  [Parameter, EditorRequired] public ICollection<string> Selected { get; set; } = default!;
+  [Parameter] public string Id { get; set; } = "sh-permissions";
+
+  private IReadOnlyList<CatalogGroup>? _catalog;
+  private string _filter = "";
+  private string _typed = "";
+
+  private IStringLocalizer? _l;
+  private IStringLocalizer L => _l ??= Texts.Create(typeof(ShiftsPageBase));
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var http = HttpClients.CreateClient(HttpClientNames.WebApi);
+      _catalog = PermissionCatalog.Parse(await http.GetStringAsync(PermissionCatalog.Url));
+    }
+    catch (Exception e) when (e is HttpRequestException or System.Text.Json.JsonException or OperationCanceledException)
+    {
+      _catalog = [];
+    }
+    catch (Microsoft.AspNetCore.Components.WebAssembly.Authentication.AccessTokenNotAvailableException ex)
+    {
+      ex.Redirect();
+    }
+  }
+
+  private bool Matches(CatalogPermission p) =>
+    _filter.Length == 0 || p.Name.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase)
+    || (p.Description?.Contains(_filter.Trim(), StringComparison.CurrentCultureIgnoreCase) ?? false);
+
+  private void Toggle(string name, bool on)
+  {
+    if (!on) Selected.Remove(name);
+    else if (!Selected.Contains(name)) Selected.Add(name);
+  }
+
+  private void AddTyped()
+  {
+    Toggle(_typed.Trim(), true);
+    _typed = "";
+  }
+}

@@ -1,0 +1,143 @@
+@page "/shifts/attendance"
+@inherits ShiftsPageBase
+
+@*
+  A unit's attendance rules (GET/PUT /api/shifts/units/{id}/attendance): five thresholds in minutes. An empty field
+  inherits from the units above, then from the installation; the effective value is shown beside each.
+*@
+
+<PageHeader Title="@L["Attendance rules"]" />
+
+<div class="mud-container sh-page">
+  <ShiftsNav Current="attendance" />
+
+  <header class="sh-header">
+    <UnitPicker Tree="Units" Value="@_choice" ValueChanged="ChooseAsync" Class="sh-inline" Dense="true" Placeholder="@L["Choose a unit"].Value" />
+    <div class="sh-actions">
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="LoadAsync" disabled="@Busy">@L["Refresh"]</button>
+    </div>
+  </header>
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 sh-error" role="alert" dir="auto">@Error</p>
+  }
+
+  @if (UnitId is null)
+  {
+    <p class="sh-muted">@L["Choose a unit to see its attendance rules."]</p>
+  }
+  else if (_rules is not null)
+  {
+    <form class="mud-paper mud-elevation-1 sh-card sh-form" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+      <h2 class="mud-typography mud-typography-h6">@UnitName(UnitId)</h2>
+      <p class="sh-muted">@L["An empty field takes the value of the nearest unit above that sets it, else the installation's."]</p>
+      <div class="sh-grid">
+        @foreach (var field in Fields)
+        {
+          <div class="mud-input-control">
+            <label class="mud-input-label" for="sh-a-@field.Id">@L[field.Title]</label>
+            <div class="mud-input-wrapper">
+              <input id="sh-a-@field.Id" type="number" min="0" max="1440" dir="ltr" class="mud-input-slot"
+                     value="@field.Get(_edit)" placeholder="@field.Effective(_rules.Effective)"
+                     @onchange="e => field.Set(_edit, ParseMinutes(e.Value))" />
+            </div>
+            <div class="mud-input-helper-text">@L["In force now: {0} min", field.Effective(_rules.Effective)]. @L[field.Help]</div>
+          </div>
+        }
+      </div>
+      <div class="sh-actions">
+        <button type="submit" class="mud-button-root mud-button-filled mud-button-primary" disabled="@Busy">@L["Save"]</button>
+        <button type="button" class="mud-button-root mud-button-text mud-button-surface" disabled="@Busy" @onclick="ClearAll">@L["Clear all (inherit)"]</button>
+      </div>
+    </form>
+  }
+</div>
+
+@code {
+  [SupplyParameterFromQuery(Name = "unit")] public string? Unit { get; set; }
+
+  private sealed record Field(string Id, string Title, string Help,
+    Func<UnitAttendanceRequest, int?> Get, Action<UnitAttendanceRequest, int?> Set, Func<AttendanceThresholdsDto, int> Effective);
+
+  private static readonly Field[] Fields =
+  [
+    new("early", "Early check-in (minutes)", "How long before the start check-in opens.",
+      r => r.EarlyCheckInMinutes, (r, v) => r.EarlyCheckInMinutes = v, t => t.EarlyCheckInMinutes),
+    new("late", "Late after (minutes)", "A check-in this long after the start is late.",
+      r => r.LateMinutes, (r, v) => r.LateMinutes = v, t => t.LateMinutes),
+    new("absent", "Absent after (minutes)", "A member not in this long after the start is marked absent.",
+      r => r.AbsentMinutes, (r, v) => r.AbsentMinutes = v, t => t.AbsentMinutes),
+    new("overtime", "Overtime after (minutes)", "Staying this long past the end counts as overtime.",
+      r => r.OvertimeMinutes, (r, v) => r.OvertimeMinutes = v, t => t.OvertimeMinutes),
+    new("grace", "Check-out grace (minutes)", "How long after the end an open shift is checked out automatically.",
+      r => r.CheckoutGraceMinutes, (r, v) => r.CheckoutGraceMinutes = v, t => t.CheckoutGraceMinutes),
+  ];
+
+  private string _choice = "";
+  private bool _loaded;
+  private UnitAttendanceDto? _rules;
+  private UnitAttendanceRequest _edit = new();
+
+  private Guid? UnitId => UnitPicker.Parse(_choice);
+
+  private static int? ParseMinutes(object? value) =>
+    int.TryParse(value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var minutes) ? minutes : null;
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (firstRender) await LoadAsync();
+  }
+
+  private Task LoadAsync() => RunAsync(async () =>
+  {
+    await LoadUnitsAsync();
+    if (!_loaded)
+    {
+      _choice = Units.Find(UnitPicker.Parse(Unit)) is { } asked ? asked.Id.ToString()
+        : Units.Roots.Count == 1 ? Units.Roots[0].Unit.Id.ToString() : "";
+      _loaded = true;
+    }
+    await LoadRulesAsync();
+  }, toast: false);
+
+  private async Task LoadRulesAsync()
+  {
+    var unitId = UnitId;
+    if (unitId is null)
+    {
+      _rules = null;
+      return;
+    }
+    var rules = await Api.GetUnitAttendanceAsync(unitId.Value);
+    if (unitId == UnitId) Show(rules);
+  }
+
+  private void Show(UnitAttendanceDto rules)
+  {
+    _rules = rules;
+    _edit = new UnitAttendanceRequest
+    {
+      EarlyCheckInMinutes = rules.EarlyCheckInMinutes,
+      LateMinutes = rules.LateMinutes,
+      AbsentMinutes = rules.AbsentMinutes,
+      OvertimeMinutes = rules.OvertimeMinutes,
+      CheckoutGraceMinutes = rules.CheckoutGraceMinutes,
+    };
+  }
+
+  private async Task ChooseAsync(string choice)
+  {
+    (_choice, _rules) = (choice, null);
+    Nav.NavigateTo(Nav.GetUriWithQueryParameter("unit", choice.Length == 0 ? null : choice), replace: true);
+    await RunAsync(LoadRulesAsync, toast: false);
+  }
+
+  private void ClearAll() => _edit = new UnitAttendanceRequest();
+
+  private Task SaveAsync() => RunAsync(async () =>
+  {
+    Show(await Api.SetUnitAttendanceAsync(UnitId!.Value, _edit));
+    await MudTail.ToastAsync(L["Attendance rules saved."], "success");
+  });
+}
