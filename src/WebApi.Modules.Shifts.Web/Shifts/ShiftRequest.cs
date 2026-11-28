@@ -5,6 +5,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Web.Shifts;
 /// <summary>
 /// The body of <see cref="Add"/> and <see cref="Update"/>. Its name is the OpenAPI schema name: keep it stable.
 /// <paramref name="UnitId"/>: the shift's Organization unit (a cached one); left out, the unit its section moved to, or
-/// none while the section has not moved.
+/// none while the section has not moved. <paramref name="SectionId"/>: left out for a shift planned for a unit only (on
+/// update, left out keeps the shift's section).
 /// </summary>
-public sealed record ShiftRequest(int SectionId, DateTimeOffset StartsAt, DateTimeOffset EndsAt, IReadOnlyList<RotaEntry> Rota, Guid? UnitId = null);
+public sealed record ShiftRequest(int? SectionId, DateTimeOffset StartsAt, DateTimeOffset EndsAt, IReadOnlyList<RotaEntry> Rota, Guid? UnitId = null);

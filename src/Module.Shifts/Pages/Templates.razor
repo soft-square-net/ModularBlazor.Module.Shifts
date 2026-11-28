@@ -1,0 +1,277 @@
+@page "/shifts/templates"
+@inherits ShiftsPageBase
+
+@*
+  A unit's shift templates (GET/POST/PUT/DELETE /api/shifts/templates): a start on the unit's clock, a duration, the
+  places to fill per role and the people a clone puts on the rota. Cloning into a date makes a draft shift and says
+  what it still lacks (POST .../{id}/clone).
+*@
+
+<PageHeader Title="@L["Shift templates"]" />
+
+<div class="mud-container sh-page">
+  <ShiftsNav Current="templates" />
+
+  <header class="sh-header">
+    <UnitPicker Tree="Units" Value="@_choice" ValueChanged="ChooseAsync" Class="sh-inline" Dense="true" Placeholder="@L["Choose a unit"].Value" />
+    <div class="sh-actions">
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="LoadAsync" disabled="@Busy">@L["Refresh"]</button>
+      <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="OpenNew" disabled="@(Busy || UnitId is null)">@L["New template"]</button>
+    </div>
+  </header>
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 sh-error" role="alert" dir="auto">@Error</p>
+  }
+
+  @if (_cloned is not null)
+  {
+    <section class="mud-paper mud-elevation-2 sh-card" role="status">
+      <h2 class="mud-typography mud-typography-h6">@L["Draft shift #{0} planned.", _cloned.Shift.Id]</h2>
+      @if (_cloned.Warnings.Count == 0)
+      {
+        <p>@L["No warnings: every slot is filled."]</p>
+      }
+      else
+      {
+        <p>@L["Before publishing it, look at these warnings:"]</p>
+        <ul class="sh-list sh-warnings">
+          @foreach (var warning in _cloned.Warnings)
+          {
+            <li dir="auto">@warning</li>
+          }
+        </ul>
+      }
+      <div class="sh-actions">
+        <a class="mud-button-root mud-button-filled mud-button-primary mud-button-small" href="shifts/@_cloned.Shift.Id">@L["Open the draft shift"]</a>
+        <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-small" @onclick="() => _cloned = null">@L["Close"]</button>
+      </div>
+    </section>
+  }
+
+  @if (_form is not null)
+  {
+    <form class="mud-paper mud-elevation-2 sh-card sh-form" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+      <h2 class="mud-typography mud-typography-h6">@(_form.Id is null ? L["New template"] : L["Edit template"])</h2>
+      <p>@L["Unit"]: <strong>@UnitName(_form.UnitId)</strong></p>
+      <div class="sh-grid">
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="sh-t-name">@L["Name"]</label>
+          <div class="mud-input-wrapper"><input id="sh-t-name" class="mud-input-slot" dir="auto" maxlength="200" required @bind="_form.Name" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="sh-t-start">@L["Starts"]</label>
+          <div class="mud-input-wrapper"><input id="sh-t-start" type="time" dir="ltr" class="mud-input-slot" required value="@_form.Start" @onchange="e => _form.Start = e.Value?.ToString() ?? string.Empty" /></div>
+          <div class="mud-input-helper-text">@L["On the unit's clock: {0}.", ClockOf(_form.UnitId).Name]</div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="sh-t-hours">@L["Hours"]</label>
+          <div class="mud-input-wrapper"><input id="sh-t-hours" type="number" min="0" max="24" dir="ltr" class="mud-input-slot" @bind="_form.Hours" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="sh-t-minutes">@L["Minutes"]</label>
+          <div class="mud-input-wrapper"><input id="sh-t-minutes" type="number" min="0" max="59" dir="ltr" class="mud-input-slot" @bind="_form.Minutes" /></div>
+        </div>
+      </div>
+
+      <fieldset class="sh-rota">
+        <legend>@L["Places to fill"]</legend>
+        @foreach (var (slot, index) in _form.Slots.Select((s, i) => (s, i)))
+        {
+          <div class="sh-rota-row" @key="slot">
+            <select class="mud-input-slot" aria-label="@L["Role of place {0}", index + 1]" value="@slot.RoleKey" @onchange="e => slot.RoleKey = e.Value?.ToString() ?? slot.RoleKey">
+              @foreach (var option in RoleChoices.For(_roles, slot.RoleKey, Arabic, key => L[key]))
+              {
+                <option value="@option.Key" selected="@(option.Key == slot.RoleKey)">@option.Name@(option.IsLead ? " · " + L["lead"] : "")</option>
+              }
+            </select>
+            <input class="mud-input-slot sh-count" type="number" min="1" max="100" dir="ltr" aria-label="@L["People in place {0}", index + 1]" @bind="slot.Count" />
+            <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => _form.Slots.Remove(slot)">@L["Remove"]</button>
+          </div>
+        }
+        <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => _form.Slots.Add(new())">@L["Add a place"]</button>
+      </fieldset>
+
+      <fieldset class="sh-rota">
+        <legend>@L["Default members"]</legend>
+        <p class="sh-muted">@L["A clone puts them on the rota. They must belong to the unit or a unit above it; at most one is a lead."]</p>
+        @foreach (var (row, index) in _form.Members.Select((r, i) => (r, i)))
+        {
+          <div class="sh-rota-row" @key="row">
+            <input class="mud-input-slot" aria-label="@L["User id of member {0}", index + 1]" placeholder="@L["User id"]" dir="ltr" @bind="row.UserId" />
+            <select class="mud-input-slot" aria-label="@L["Role of member {0}", index + 1]" value="@row.RoleKey" @onchange="e => row.RoleKey = e.Value?.ToString() ?? row.RoleKey">
+              @foreach (var option in RoleChoices.For(_roles, row.RoleKey, Arabic, key => L[key]))
+              {
+                <option value="@option.Key" selected="@(option.Key == row.RoleKey)">@option.Name@(option.IsLead ? " · " + L["lead"] : "")</option>
+              }
+            </select>
+            <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => _form.Members.Remove(row)">@L["Remove"]</button>
+          </div>
+        }
+        <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => _form.Members.Add(new())">@L["Add a member"]</button>
+      </fieldset>
+
+      <div class="sh-actions">
+        <button type="submit" class="mud-button-root mud-button-filled mud-button-primary" disabled="@Busy">@L["Save"]</button>
+        <button type="button" class="mud-button-root mud-button-text mud-button-surface" @onclick="() => _form = null">@L["Cancel"]</button>
+      </div>
+    </form>
+  }
+
+  @if (UnitId is null)
+  {
+    <p class="sh-muted">@L["Choose a unit to see its templates."]</p>
+  }
+  else if (_templates.Count == 0)
+  {
+    <p class="sh-muted">@L["This unit has no templates yet."]</p>
+  }
+  else
+  {
+    <div class="sh-cards">
+      @foreach (var template in _templates)
+      {
+        <section class="mud-paper mud-elevation-1 sh-card" @key="template.Id">
+          <h2 class="mud-typography mud-typography-subtitle1" dir="auto">@template.Name</h2>
+          <p><bdi dir="ltr">@TemplateForm.FormatStart(template.StartLocal)</bdi> · @DurationText(template)</p>
+          <div class="sh-facts">
+            @foreach (var slot in template.Slots)
+            {
+              <span class="sh-chip">@RoleChoices.Name(_roles, slot.RoleKey, Arabic, key => L[key]) <strong>@slot.Count</strong></span>
+            }
+          </div>
+          @if (template.DefaultMembers.Count > 0)
+          {
+            <p class="sh-muted">@L["Default members: {0}.", template.DefaultMembers.Count]</p>
+          }
+          <div class="sh-actions">
+            <div class="mud-input-control sh-inline">
+              <label class="mud-input-label" for="sh-date-@template.Id">@L["Clone into date"]</label>
+              <div class="mud-input-wrapper mud-input-wrapper--dense">
+                <input id="sh-date-@template.Id" type="date" dir="ltr" class="mud-input-slot" value="@DateOf(template.Id)" @onchange="e => _dates[template.Id] = e.Value?.ToString() ?? string.Empty" />
+              </div>
+            </div>
+            <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-small" disabled="@Busy" @onclick="() => CloneAsync(template)">@L["Clone"]</button>
+          </div>
+          <div class="sh-actions">
+            <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" disabled="@Busy" @onclick="() => OpenEdit(template)">@L["Edit"]</button>
+            @if (_deleting == template.Id)
+            {
+              <button type="button" class="mud-button-root mud-button-filled mud-button-error mud-button-small" disabled="@Busy" @onclick="() => DeleteAsync(template)">@L["Delete for good"]</button>
+              <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-small" @onclick="() => _deleting = null">@L["Keep it"]</button>
+            }
+            else
+            {
+              <button type="button" class="mud-button-root mud-button-text mud-button-surface sh-danger mud-button-small" disabled="@Busy" @onclick="() => _deleting = template.Id">@L["Delete"]</button>
+            }
+          </div>
+        </section>
+      }
+    </div>
+  }
+</div>
+
+@code {
+  [SupplyParameterFromQuery(Name = "unit")] public string? Unit { get; set; }
+
+  private string _choice = "";
+  private List<ShiftTemplateDto> _templates = [];
+  private List<RoleDefinitionDto> _roles = [];
+  private TemplateForm? _form;
+  private TemplateCloneResult? _cloned;
+  private int? _deleting;
+  private bool _loaded;
+  private readonly Dictionary<int, string> _dates = [];
+
+  private Guid? UnitId => UnitPicker.Parse(_choice);
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (firstRender) await LoadAsync();
+  }
+
+  private Task LoadAsync() => RunAsync(async () =>
+  {
+    await LoadUnitsAsync();
+    if (!_loaded)
+    {
+      _choice = Units.Find(UnitPicker.Parse(Unit)) is { } asked ? asked.Id.ToString()
+        : Units.Roots.Count == 1 ? Units.Roots[0].Unit.Id.ToString() : "";
+      _loaded = true;
+    }
+    await LoadUnitAsync();
+  }, toast: false);
+
+  private async Task LoadUnitAsync()
+  {
+    var unitId = UnitId;
+    if (unitId is null)
+    {
+      (_templates, _roles) = ([], []);
+      return;
+    }
+    var templates = (await Api.ListTemplatesAsync(unitId)).OrderBy(t => t.StartLocal).ThenBy(t => t.Name).ToList();
+    var roles = (await Api.ListEffectiveRolesAsync(unitId)).ToList();
+    if (unitId != UnitId) return; // another unit was chosen meanwhile
+    (_templates, _roles) = (templates, roles);
+  }
+
+  private async Task ChooseAsync(string choice)
+  {
+    _choice = choice;
+    (_templates, _form, _cloned, _deleting) = ([], null, null, null);
+    Nav.NavigateTo(Nav.GetUriWithQueryParameter("unit", choice.Length == 0 ? null : choice), replace: true);
+    await RunAsync(LoadUnitAsync, toast: false);
+  }
+
+  private void OpenNew() => (_form, _cloned) = (TemplateForm.New(UnitId!.Value), null);
+
+  private void OpenEdit(ShiftTemplateDto template) => (_form, _cloned) = (TemplateForm.From(template), null);
+
+  /// <summary>Tomorrow on the unit's clock until another day is chosen.</summary>
+  private string DateOf(int id) => _dates.TryGetValue(id, out var date) ? date
+    : ZoneTime.Date(ZoneTime.DateOf(DateTimeOffset.UtcNow, ClockOf(UnitId).Zone).AddDays(1));
+
+  private string DurationText(ShiftTemplateDto template)
+  {
+    var duration = TemplateForm.ParseDuration(template.Duration);
+    return duration.Minutes == 0 ? L["{0} h", (int)duration.TotalHours] : L["{0} h {1} min", (int)duration.TotalHours, duration.Minutes];
+  }
+
+  private async Task SaveAsync()
+  {
+    var form = _form!;
+    await RunAsync(async () =>
+    {
+      var request = form.ToRequest();
+      var saved = form.Id is { } id ? await Api.UpdateTemplateAsync(id, request) : await Api.AddTemplateAsync(request);
+      await MudTail.ToastAsync(L["Template {0} saved.", saved.Name], "success");
+      _form = null;
+    }, () => QuietlyAsync(LoadUnitAsync));
+  }
+
+  private async Task CloneAsync(ShiftTemplateDto template)
+  {
+    _cloned = null;
+    await RunAsync(async () =>
+    {
+      if (!DateOnly.TryParseExact(DateOf(template.Id), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        throw new ShiftFormException("Choose the date to clone into.");
+      // The client writes the date alone ("yyyy-MM-dd"): it is a day on the unit's clock, not an instant.
+      _cloned = await Api.CloneTemplateAsync(template.Id,
+        new TemplateCloneRequest { Date = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero) });
+    });
+  }
+
+  private async Task DeleteAsync(ShiftTemplateDto template)
+  {
+    await RunAsync(async () =>
+    {
+      await Api.DeleteTemplateAsync(template.Id);
+      await MudTail.ToastAsync(L["Template {0} deleted.", template.Name], "success");
+      if (_form?.Id == template.Id) _form = null;
+    }, () => QuietlyAsync(LoadUnitAsync));
+    _deleting = null;
+  }
+}

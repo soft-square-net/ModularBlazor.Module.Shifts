@@ -120,7 +120,11 @@ public sealed class MoveSectionsToOrganizationHandler(
             return Failed(section, $"Unit {unitId} is not known here: resync the units (POST /units/resync) once Organization has it.");
         if (unit.TypeKey != CachedUnit.SectionType) return Failed(section, $"Unit {unitId} is a '{unit.TypeKey}', not a Section unit.");
         var count = await CommitAsync(section, unit, me, ct);
-        return new SectionMoveItem(section.Id, section.Name, section.Kind, SectionMoveStatus.Linked, unit.Id, count, null);
+        // A moved department is granted on section:{unitId}, which only a unit tagged 'department' gets: say so.
+        var detail = section.IsDepartment && !unit.IsDepartmentSection
+            ? $"The unit is not tagged '{CachedUnit.DepartmentTag}': this department's rota gets no section: scope. Tag the unit in Organization."
+            : null;
+        return new SectionMoveItem(section.Id, section.Name, section.Kind, SectionMoveStatus.Linked, unit.Id, count, detail);
     }
 
     private async Task<SectionMoveItem> CreateAsync(Section section, CachedUnit parent, OrgApi.IOrganizationClient central,

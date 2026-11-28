@@ -2,14 +2,11 @@
    tokens of UI.MudTail. */
 .sh-page { padding-block: 8px 32px; }
 .sh-header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; }
-.sh-header h1 { margin: 0 0 4px; }
 .sh-header p { max-width: 72ch; margin: 0; }
 .sh-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .sh-inline { margin: 0; min-width: 160px; }
-.sh-grow { flex: 1 1 220px; }
 .sh-muted { color: var(--mud-palette-text-secondary); }
 .sh-error { color: var(--mud-palette-error); }
-.sh-back { margin-bottom: 8px; }
 .sh-card { padding: 20px; margin-bottom: 16px; border-radius: var(--mud-default-borderradius, 8px); }
 .sh-card h2 { margin: 0 0 12px; }
 .sh-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
@@ -21,19 +18,49 @@
 .sh-chip-warn { border-color: var(--mud-palette-warning); }
 .sh-form { display: grid; gap: 4px; }
 .sh-grid { display: grid; gap: 0 16px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-.sh-wide { grid-column: 1 / -1; }
-.sh-row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .sh-rota { display: grid; gap: 8px; margin: 4px 0 8px; }
 .sh-rota-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
 .sh-rota-row .mud-input-control { margin: 0; }
 .sh-table { width: 100%; border-collapse: collapse; }
-.sh-table th, .sh-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--mud-palette-lines-default); }
+.sh-table th, .sh-table td { text-align: start; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--mud-palette-lines-default); }
 .sh-table th { font-weight: 500; color: var(--mud-palette-text-secondary); }
 .sh-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
 .sh-dl dt { color: var(--mud-palette-text-secondary); }
 .sh-dl dd { margin: 0; }
 .sh-columns { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-.sh-list { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-.sh-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
 .sh-note { white-space: pre-wrap; margin: 0 0 .25rem; }
 .sh-handover { width: 100%; box-sizing: border-box; font: inherit; padding: .5rem; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius); background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); }
+.sh-nav { display: flex; flex-wrap: wrap; gap: 4px; margin-block-end: 16px; }
+.sh-check { display: inline-flex; gap: 8px; align-items: baseline; cursor: pointer; }
+.sh-banner { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 8px 12px; margin-block-end: 16px; border: 1px solid var(--mud-palette-warning); border-radius: var(--mud-default-borderradius, 8px); }
+.sh-problem { padding: 12px; margin-block-end: 12px; border: 1px solid var(--mud-palette-error); border-radius: var(--mud-default-borderradius, 8px); }
+.sh-list { margin-block: 8px; padding-inline-start: 20px; display: grid; gap: 4px; }
+.sh-warnings li::marker { color: var(--mud-palette-warning); }
+.sh-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.sh-scroll { overflow-x: auto; }
+.sh-cards { display: grid; gap: 0 16px; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); align-items: start; }
+.sh-card-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.sh-week-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-block-end: 8px; }
+.sh-week-bar h2, .sh-week-bar p { margin: 0; }
+.sh-week { display: grid; gap: 8px; grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: start; margin-block-end: 16px; }
+@media (max-width: 1100px) { .sh-week { grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); } }
+.sh-day { display: grid; gap: 8px; align-content: start; padding: 8px; border: 1px solid transparent; border-radius: var(--mud-default-borderradius, 8px); }
+.sh-day header h3, .sh-day p { margin: 0; }
+.sh-today { border-color: var(--mud-palette-primary); }
+.sh-slot { display: grid; gap: 4px; justify-items: start; padding: 8px; font-size: .8125rem; text-decoration: none; color: var(--mud-palette-text-primary); border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius, 8px); overflow-wrap: anywhere; }
+.sh-slot:hover, .sh-slot:focus-visible { border-color: var(--mud-palette-primary); }
+.sh-slot-time { font-weight: 600; }
+.sh-count { max-width: 96px; }
+.sh-permissions { display: grid; gap: 8px; margin-block: 8px; }
+.sh-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+button.sh-chip { cursor: pointer; font-family: inherit; }
+.sh-catalog { max-height: 280px; overflow: auto; display: grid; gap: 12px; }
+.sh-catalog-group { display: grid; gap: 4px; }
+.sh-export { width: 100%; box-sizing: border-box; font-family: monospace; font-size: .8125rem; margin-block-start: 8px; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius, 8px); background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); padding: 8px; }
+.sh-rota, .sh-permissions { min-width: 0; padding: 12px; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius, 8px); }
+.mud-button-root.mud-button-surface.sh-danger { color: var(--mud-palette-error); }
+.mud-button-root.mud-button-outlined.mud-button-surface.sh-danger { border-color: var(--mud-palette-error); }
+.sh-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sh-header > .sh-inline { flex: 0 1 360px; }
+.sh-rota-row > input.mud-input-slot, .sh-rota-row > select.mud-input-slot { flex: 1 1 200px; min-width: 0; width: auto; box-sizing: border-box; padding: 8px 12px; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius, 8px); background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); }
+.sh-rota-row > input.sh-count { flex: 0 0 96px; }

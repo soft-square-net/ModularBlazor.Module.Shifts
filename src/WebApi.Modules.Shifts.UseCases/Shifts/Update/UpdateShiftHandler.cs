@@ -12,7 +12,7 @@ public sealed class UpdateShiftHandler(ShiftChanges changes, ShiftUnits units, S
             var (shift, section) = change;
             var allowed = await authority.RequireManageAsync(shift.UnitId, ct);
             if (!allowed.IsSuccess) return allowed;
-            if (shift.SectionId != command.SectionId)
+            if (command.SectionId is { } named && shift.SectionId != named)
                 return Result.Conflict("A shift cannot move to another section; delete it and plan a new one.");
             if (command.UnitId is { } unitId && shift.UnitId is { } current && current != unitId)
                 return Result.Conflict("A shift cannot move to another unit; delete it and plan a new one.");
@@ -20,7 +20,7 @@ public sealed class UpdateShiftHandler(ShiftChanges changes, ShiftUnits units, S
             var unit = shift.UnitId;
             if (command.UnitId is not null && shift.UnitId is null)
             {
-                var resolved = await units.ResolveAsync(command.SectionId, command.UnitId, ct);
+                var resolved = await units.ResolveAsync(shift.SectionId, command.UnitId, ct);
                 if (!resolved.IsSuccess) return Result.Invalid([.. resolved.ValidationErrors]); // ShiftUnits only refuses as Invalid
                 unit = resolved.Value;
                 if (unit is not null)

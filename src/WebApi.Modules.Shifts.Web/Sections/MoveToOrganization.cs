@@ -11,7 +11,7 @@ public sealed class MoveToOrganization : IEndpoint
             .WithName("Shifts_MoveSectionsToOrganization")
             .WithSummary("Creates a Section unit under the Department parentUnitId for each section (with the caller's token; a department section " +
                          "gets the tag 'department' and the category '*'), or links the units given in links. Maps the section, moves its shifts to the " +
-                         "unit and publishes shifts.section-moved.v1. Idempotent; one result per section. The sections are read-only afterwards.");
+                         "unit and publishes shifts.section-moved.v1. Idempotent; one result per section.");
 
     private static async Task<Results<Ok<SectionMoveReport>, ProblemHttpResult>> HandleAsync(MoveSectionsRequest r, ISender sender, CancellationToken ct) =>
         (await sender.Send(new MoveSectionsToOrganizationCommand(r.ParentUnitId, r.Links), ct)).ToOkResult();

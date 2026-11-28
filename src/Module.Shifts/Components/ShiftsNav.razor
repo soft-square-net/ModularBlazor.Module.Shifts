@@ -1,0 +1,29 @@
+@inject IStringLocalizerFactory Texts
+
+@* The module's pages, as a row of links under the page title. *@
+
+<nav class="sh-nav" aria-label="@L["Shifts pages"]">
+  @foreach (var (key, href, title) in Pages)
+  {
+    <a href="@href" class="mud-button-root mud-button-small @(key == Current ? "mud-button-filled mud-button-primary" : "mud-button-text mud-button-surface")"
+       aria-current="@(key == Current ? "page" : null)">@L[title]</a>
+  }
+</nav>
+
+@code {
+  [Parameter] public string Current { get; set; } = "";
+
+  /// <summary>(key, address, title: a key of the texts).</summary>
+  public static readonly (string Key, string Href, string Title)[] Pages =
+  [
+    ("planner", "shifts", "Planner"),
+    ("mine", "shifts/mine", "My shifts"),
+    ("templates", "shifts/templates", "Templates"),
+    ("roles", "shifts/roles", "Roles"),
+    ("attendance", "shifts/attendance", "Attendance rules"),
+    ("sections", "shifts/sections", "Moved sections"),
+  ];
+
+  private IStringLocalizer? _l;
+  private IStringLocalizer L => _l ??= Texts.Create(typeof(ShiftsPageBase));
+}

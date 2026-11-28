@@ -2,51 +2,64 @@
 @inherits ShiftsPageBase
 
 @*
-  One shift: its facts and rota (GET /api/shifts/shifts/{id}), what automation applies to it (GET .../automation), and
-  the actions: publish, check in (yourself, or a member as the lead or a manager: check-in is what writes a member's
-  grants), check out the whole shift or one member, the lead's handover note, edit (PUT) and delete.
+  One shift on its unit's clock: the rota with the role names that hold for the unit (GET /roles/effective), the
+  attendance board with check-in and check-out for yourself and per member, the handover card, what automation applies
+  (GET .../automation), and publish, check out the whole shift, edit and delete. Live: shifts:shift:{id}; a reload
+  nobody asked for keeps an open edit form or handover draft.
 *@
 
-<PageHeader Title="@(_shift is null ? L["Shift #{0}", Id].Value : $"{L["Shift #{0}", _shift.Id]} · {_shift.Section}")" />
+<PageHeader Title="@(_shift is null ? L["Shift #{0}", Id].Value : $"{L["Shift #{0}", _shift.Id]} · {PlaceOf(_shift)}")" />
 
 <div class="mud-container sh-page">
-  <a href="shifts" class="mud-button-root mud-button-text mud-button-primary mud-button-small sh-back">@L["← All shifts"]</a>
+  <ShiftsNav Current="shift" />
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 sh-error" role="alert" dir="auto">@Error</p>
+  }
 
   @if (_shift is null)
   {
-    @if (Error is not null)
+    @if (_gone)
     {
-      <p class="mud-typography mud-typography-body2 sh-error" role="alert">@Error</p>
+      <p class="sh-muted">@L["This shift no longer exists, or you may not see it."]</p>
     }
-    else
+    else if (Error is null)
     {
-      <p class="mud-typography mud-typography-body1 sh-muted">@L["Loading…"]</p>
+      <p class="sh-muted">@L["Loading…"]</p>
     }
   }
   else
   {
+    var now = DateTimeOffset.UtcNow;
+    var status = ShiftState.Status(_shift, now);
+    var (present, people) = ShiftState.Presence(_shift);
+
     <header class="sh-header">
       <div>
-        <p class="mud-typography mud-typography-body1 sh-muted">@When(_shift.StartsAt) → @When(_shift.EndsAt)</p>
+        <p class="mud-typography mud-typography-body1">
+          <bdi dir="ltr">@ZoneTime.Stamp(_shift.StartsAt, _zone) → @ZoneTime.Stamp(_shift.EndsAt, _zone)</bdi>
+        </p>
+        <p class="sh-muted">@L["Times are in this clock: {0}.", _zoneName]</p>
       </div>
       <div class="sh-actions">
         <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="LoadAsync" disabled="@Busy">@L["Refresh"]</button>
+        @if (ShiftState.CanCheckIn(_shift, Me, now))
+        {
+          <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="CheckInAsync" disabled="@Busy">@L["Check in"]</button>
+        }
+        @if (ShiftState.CanCheckOut(_shift, Me))
+        {
+          <button type="button" class="mud-button-root mud-button-outlined mud-button-secondary mud-button-medium" @onclick="() => CheckOutMemberAsync(Me!)" disabled="@Busy">@L["Check me out"]</button>
+        }
         @if (_shift.CheckedOutAt is null)
         {
           @if (!_shift.Published)
           {
             <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="PublishAsync" disabled="@Busy">@L["Publish"]</button>
           }
-          <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="OpenEdit" disabled="@Busy">@L["Edit"]</button>
-          @if (MyCheckIn)
-          {
-            <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="CheckInAsync" disabled="@Busy">@L["Check in"]</button>
-          }
-          @if (Mine is { CheckedInAt: not null, CheckedOutAt: null })
-          {
-            <button type="button" class="mud-button-root mud-button-outlined mud-button-secondary mud-button-medium" @onclick="() => CheckOutMemberAsync(Me!)" disabled="@Busy">@L["Check me out"]</button>
-          }
-          @if (CanCheckOut)
+          <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="OpenEditAsync" disabled="@Busy">@L["Edit"]</button>
+          @if (ShiftState.CanCheckOutShift(_shift, now))
           {
             <button type="button" class="mud-button-root mud-button-filled mud-button-secondary mud-button-medium" @onclick="CheckOutAsync" disabled="@Busy">@L["Check out shift"]</button>
           }
@@ -58,232 +71,309 @@
         }
         else
         {
-          <button type="button" class="mud-button-root mud-button-outlined mud-button-error mud-button-medium" @onclick="() => _confirmDelete = true" disabled="@Busy">@L["Delete"]</button>
+          <button type="button" class="mud-button-root mud-button-outlined mud-button-surface sh-danger mud-button-medium" @onclick="() => _confirmDelete = true" disabled="@Busy">@L["Delete"]</button>
         }
       </div>
     </header>
 
     <div class="sh-facts">
-      <span class="sh-chip @(Status(_shift) == "Running" ? "sh-chip-on" : Status(_shift) == "Overdue" ? "sh-chip-warn" : "")">@L[Status(_shift)]</span>
+      <span class="sh-chip @ShiftState.StatusClass(status)">@L[status]</span>
       @foreach (var category in _shift.Categories)
       {
-        <span class="sh-chip">@category</span>
+        <span class="sh-chip"><bdi>@category</bdi></span>
       }
     </div>
 
-    @if (Error is not null)
-    {
-      <p class="mud-typography mud-typography-body2 sh-error" role="alert">@Error</p>
-    }
-
     @if (_form is not null)
     {
-      <ShiftEditor Form="_form" Sections="_sections" Roles="_roles" Title="@L["Edit shift"]" SubmitText="@L["Save"]" SectionLocked="true"
-                   Busy="Busy" Me="@Me" OnSave="SaveAsync" OnCancel="() => _form = null" />
+      <ShiftEditor Form="_form" Title="@L["Edit shift"]" SubmitText="@L["Save"]" Sections="_sections" Roles="_roles"
+                   UnitName="@UnitName(_form.UnitId)" ZoneName="@_zoneName" Busy="Busy" Me="@Me" OnSave="SaveAsync" OnCancel="() => _form = null" />
     }
 
-    <div class="sh-columns">
-      <section class="mud-paper mud-elevation-1 sh-card">
-        <h2 class="mud-typography mud-typography-h6">@L["Rota"]</h2>
-        @if (_shift.Rota.Count == 0)
-        {
-          <p class="mud-typography mud-typography-body2 sh-muted">@L["Nobody is on this shift yet. Edit it to add members."]</p>
-        }
-        else
-        {
+    <section class="mud-paper mud-elevation-1 sh-card">
+      <h2 class="mud-typography mud-typography-h6">@L["Attendance"]</h2>
+      @if (_shift.Rota.Count == 0)
+      {
+        <p class="sh-muted">@L["Nobody is on this shift yet. Edit it to add members."]</p>
+      }
+      else
+      {
+        <div class="sh-facts">
+          <span class="sh-chip">@L["{0} of {1} in", present, people]</span>
+          @foreach (var key in ShiftState.AttendanceStatuses)
+          {
+            var count = _shift.Rota.Count(m => m.Status == key);
+            if (count > 0)
+            {
+              <span class="sh-chip @ShiftState.AttendanceClass(key)">@L[ShiftState.AttendanceText(key)] <strong>@count</strong></span>
+            }
+          }
+        </div>
+        <div class="sh-scroll">
           <table class="sh-table mud-typography-body2">
-            <thead><tr><th>@L["Member"]</th><th>@L["Role"]</th><th>@L["Attendance"]</th><th>@L["Checked in"]</th><th>@L["Checked out"]</th><th>@L["Access"]</th><th></th></tr></thead>
+            <thead><tr><th>@L["Member"]</th><th>@L["Role"]</th><th>@L["Status"]</th><th>@L["Checked in"]</th><th>@L["Checked out"]</th><th>@L["Access"]</th><th><span class="sh-sr">@L["Actions"]</span></th></tr></thead>
             <tbody>
               @foreach (var member in _shift.Rota)
               {
-                <tr>
-                  <td>@Who(member.UserId)</td>
-                  <td>@member.RoleKey@(member.IsLead ? " ★" : "")</td>
-                  <td><span class="sh-chip @AttendanceClass(member.Status)">@L[AttendanceText(member.Status)]</span></td>
-                  <td>@When(member.CheckedInAt)</td>
-                  <td>@When(member.CheckedOutAt)@(member.CheckedOutAutomatically ? $" ({L["automatic"]})" : "")</td>
-                  <td>@(!_shift.Published ? L["not published"] : member.AccessFrom is null ? L["after check-in"] : $"{When(member.AccessFrom)} → {When(member.AccessEnds)}")</td>
+                <tr @key="(member.UserId, member.RoleKey)">
+                  <td><bdi>@Who(member.UserId)</bdi></td>
+                  <td>@RoleChoices.Name(_roles, member.RoleKey, Arabic, key => L[key])@(member.IsLead ? " · " + L["lead"] : "")</td>
+                  <td><span class="sh-chip @ShiftState.AttendanceClass(member.Status)">@L[ShiftState.AttendanceText(member.Status)]</span></td>
                   <td>
-                    @if (CheckInOpen && member.UserId != Me && (member.CheckedInAt is null || member.CheckedOutAt is not null))
+                    <bdi dir="ltr">@At(member.CheckedInAt)</bdi>
+                    @if (member.CheckedInBy is not null && member.CheckedInBy != member.UserId)
                     {
-                      <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small"
-                              @onclick="() => CheckInMemberAsync(member.UserId)" disabled="@Busy">@L["Check in"]</button>
+                      <div class="sh-muted">@L["by {0}", Who(member.CheckedInBy)]</div>
                     }
-                    @if (CanCheckOut && member.CheckedInAt is not null && member.CheckedOutAt is null)
+                  </td>
+                  <td>
+                    <bdi dir="ltr">@At(member.CheckedOutAt)</bdi>
+                    @if (member.CheckedOutAutomatically)
                     {
-                      <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small"
-                              @onclick="() => CheckOutMemberAsync(member.UserId)" disabled="@Busy">@L["Check out"]</button>
+                      <div class="sh-muted">@L["automatic"]</div>
+                    }
+                    else if (member.CheckedOutBy is not null && member.CheckedOutBy != member.UserId)
+                    {
+                      <div class="sh-muted">@L["by {0}", Who(member.CheckedOutBy)]</div>
+                    }
+                  </td>
+                  <td>
+                    @if (!_shift.Published)
+                    {
+                      @L["not published"]
+                    }
+                    else if (member.AccessFrom is null)
+                    {
+                      @L["after check-in"]
+                    }
+                    else
+                    {
+                      <bdi dir="ltr">@At(member.AccessFrom) → @At(member.AccessEnds)</bdi>
+                    }
+                  </td>
+                  <td>
+                    @if (ShiftState.CheckInOpen(_shift, now) && ShiftState.IsOut(member))
+                    {
+                      <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" disabled="@Busy"
+                              aria-label="@L["Check in {0}", Who(member.UserId)]" @onclick="() => CheckInMemberAsync(member.UserId)">@L["Check in"]</button>
+                    }
+                    @if (!_shift.Ended && ShiftState.IsIn(member))
+                    {
+                      <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" disabled="@Busy"
+                              aria-label="@L["Check out {0}", Who(member.UserId)]" @onclick="() => CheckOutMemberAsync(member.UserId)">@L["Check out"]</button>
                     }
                   </td>
                 </tr>
               }
             </tbody>
           </table>
+        </div>
+        <p class="sh-muted">@L["Members check themselves in; the lead or a shift manager may do it for them."]</p>
+      }
+    </section>
+
+    <div class="sh-columns">
+      <section class="mud-paper mud-elevation-1 sh-card">
+        <h2 class="mud-typography mud-typography-h6">@L["Handover"]</h2>
+        @if (_handover is not null)
+        {
+          <textarea class="mud-input-slot sh-handover" rows="5" maxlength="4000" aria-label="@L["Handover"]" dir="auto" @bind="_handover" @bind:event="oninput" disabled="@Busy"></textarea>
+          <div class="sh-actions">
+            <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-small" @onclick="SaveHandoverAsync" disabled="@(Busy || string.IsNullOrWhiteSpace(_handover))">@L["Save note"]</button>
+            <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-small" @onclick="() => _handover = null">@L["Cancel"]</button>
+          </div>
+        }
+        else
+        {
+          @if (_shift.HandoverNote is { Length: > 0 } note)
+          {
+            <p class="sh-note" dir="auto">@note</p>
+            <p class="sh-muted"><bdi dir="ltr">@At(_shift.HandoverAt)</bdi> · <bdi>@Who(_shift.HandoverBy)</bdi></p>
+          }
+          else
+          {
+            <p class="sh-muted">@L["No handover note yet."]</p>
+          }
+          @if (_shift.Published && _shift.StartsAt <= now)
+          {
+            <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => _handover = _shift.HandoverNote ?? string.Empty" disabled="@Busy">@L["Write the handover"]</button>
+            <p class="sh-muted">@L["The note is the lead's, or a shift manager's, to write."]</p>
+          }
         }
       </section>
 
       <section class="mud-paper mud-elevation-1 sh-card">
         <h2 class="mud-typography mud-typography-h6">@L["Details"]</h2>
         <dl class="sh-dl mud-typography-body2">
-          <dt>@L["Section"]</dt><dd>@_shift.Section</dd>
-          <dt>@L["Published"]</dt><dd>@(_shift.Published ? "yes" : "no")</dd>
-          <dt>@L["Running"]</dt><dd>@(_shift.Running ? "yes" : "no")</dd>
-          <dt>@L["Checked out"]</dt><dd>@(_shift.CheckedOutAt is null ? "no" : $"{When(_shift.CheckedOutAt)} by {Who(_shift.CheckedOutBy)}")</dd>
-          <dt>@L["Grant source"]</dt><dd><code>@_shift.GrantSource</code></dd>
+          @if (_shift.UnitId is not null)
+          {
+            <dt>@L["Unit"]</dt>
+            <dd><a href="shifts?unit=@_shift.UnitId">@UnitName(_shift.UnitId)</a></dd>
+          }
+          @if (_shift.SectionId is not null)
+          {
+            <dt>@L["Section"]</dt>
+            <dd>@_shift.Section</dd>
+          }
+          <dt>@L["Published"]</dt><dd>@YesNo(_shift.Published)</dd>
+          <dt>@L["Running"]</dt><dd>@YesNo(_shift.Running)</dd>
+          @if (_shift.CheckedOutAt is not null)
+          {
+            <dt>@L["Checked out"]</dt><dd><bdi dir="ltr">@At(_shift.CheckedOutAt)</bdi> · <bdi>@Who(_shift.CheckedOutBy)</bdi></dd>
+          }
+          <dt>@L["Grant source"]</dt><dd><code dir="ltr">@_shift.GrantSource</code></dd>
           @if (_automation is not null)
           {
-            <dt>@L["Auto-assign after"]</dt><dd>@_automation.AutoAssignDelay</dd>
-            <dt>@L["Check-out grace"]</dt><dd>@_automation.CheckoutGrace</dd>
+            <dt>@L["Auto-assign after"]</dt><dd><bdi dir="ltr">@_automation.AutoAssignDelay</bdi></dd>
+            <dt>@L["Check-out grace"]</dt><dd><bdi dir="ltr">@_automation.CheckoutGrace</bdi></dd>
           }
-          <dt>@L["Check-in opens"]</dt><dd>@When(_shift.CheckInOpensAt)</dd>
+          <dt>@L["Check-in opens"]</dt><dd><bdi dir="ltr">@At(_shift.CheckInOpensAt)</bdi></dd>
           <dt>@L["Late after"]</dt><dd>@L["{0} min", _shift.Thresholds.LateMinutes]</dd>
           <dt>@L["Absent after"]</dt><dd>@L["{0} min", _shift.Thresholds.AbsentMinutes]</dd>
           @if (_shift.EndedAt is not null)
           {
-            <dt>@L["Ended"]</dt><dd>@When(_shift.EndedAt) · @Who(_shift.EndedBy)</dd>
+            <dt>@L["Ended"]</dt><dd><bdi dir="ltr">@At(_shift.EndedAt)</bdi> · <bdi>@Who(_shift.EndedBy)</bdi></dd>
           }
         </dl>
-      </section>
-
-      <section class="mud-paper mud-elevation-1 sh-card">
-        <h2 class="mud-typography mud-typography-h6">@L["Handover"]</h2>
-        @if (_handover is not null)
-        {
-          <textarea class="sh-handover" rows="5" maxlength="4000" @bind="_handover" disabled="@Busy"></textarea>
-          <div class="sh-actions">
-            <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-small" @onclick="SaveHandoverAsync" disabled="@(Busy || string.IsNullOrWhiteSpace(_handover))">@L["Save note"]</button>
-            <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-small" @onclick="() => _handover = null">@L["Keep it"]</button>
-          </div>
-        }
-        else if (_shift.HandoverNote is { Length: > 0 } note)
-        {
-          <p class="mud-typography mud-typography-body2 sh-note">@note</p>
-          <p class="mud-typography mud-typography-caption sh-muted">@When(_shift.HandoverAt) · @Who(_shift.HandoverBy)</p>
-        }
-        else
-        {
-          <p class="mud-typography mud-typography-body2 sh-muted">@L["No handover note yet."]</p>
-        }
-        @if (_handover is null && IAmLead && _shift.Published && _shift.StartsAt <= DateTimeOffset.UtcNow)
-        {
-          <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => _handover = _shift.HandoverNote ?? string.Empty" disabled="@Busy">@L["Write the handover"]</button>
-        }
       </section>
     </div>
   }
 </div>
 
 @code {
-  [Inject] private new IStringLocalizer<ShiftEditor> L { get; set; } = default!; // this page reads the editor's texts
-
   [Parameter] public int Id { get; set; }
 
   private ShiftDto? _shift;
   private ShiftAutomationInfo? _automation;
   private List<SectionDto> _sections = [];
   private List<RoleDefinitionDto> _roles = [];
+  private TimeZoneInfo _zone = TimeZoneInfo.Local;
+  private string _zoneName = "";
   private ShiftForm? _form;
   private bool _confirmDelete;
+  private bool _gone;
   private string? _handover;
-
-  /// <summary>Check-out is for a published shift that has started (running or overdue) and is not checked out.</summary>
-  private bool CanCheckOut => _shift is { Published: true, CheckedOutAt: null } && _shift.StartsAt <= DateTimeOffset.UtcNow;
-
-  /// <summary>The signed-in user's row on the rota (the first, when they hold more than one role).</summary>
-  private RotaMemberDto? Mine => _shift?.Rota.FirstOrDefault(m => m.UserId == Me);
-
-  private bool IAmLead => _shift?.Rota.Any(m => m.UserId == Me && m.IsLead) == true;
-
-  /// <summary>
-  /// Check-in opens before the start (the early threshold) and closes at the end. Anyone on the rota checks themselves in;
-  /// the lead or a manager checks others in (the API refuses anyone else).
-  /// </summary>
-  private bool CheckInOpen => _shift is { Published: true, Ended: false } && _shift.CheckInOpensAt <= DateTimeOffset.UtcNow
-                              && DateTimeOffset.UtcNow < _shift.EndsAt;
-
-  private bool MyCheckIn => CheckInOpen && Mine is { } me && (me.CheckedInAt is null || me.CheckedOutAt is not null);
-
-  private static string AttendanceText(string status) => status switch
-  {
-    "present" => "Present",
-    "late" => "Late",
-    "absent" => "Absent",
-    "left-early" => "Left early",
-    "overtime" => "Overtime",
-    _ => "Expected"
-  };
-
-  private static string AttendanceClass(string status) => status switch
-  {
-    "present" or "overtime" => "sh-chip-on",
-    "late" or "left-early" or "absent" => "sh-chip-warn",
-    _ => ""
-  };
+  private int _shown;
+  private bool _rendered;
 
   protected override async Task OnAfterRenderAsync(bool firstRender)
   {
-    if (firstRender) await LoadAsync();
+    if (!firstRender) return;
+    _rendered = true;
+    await OpenAsync();
+  }
+
+  protected override async Task OnParametersSetAsync()
+  {
+    if (_rendered && _shown != Id) await OpenAsync(); // from one shift's page to another's
+  }
+
+  private async Task OpenAsync()
+  {
+    _shown = Id;
+    (_shift, _automation, _form, _handover, _confirmDelete) = (null, null, null, null, false);
+    await LoadAsync();
   }
 
   private async Task LoadAsync()
   {
     await RunAsync(async () =>
     {
-      var api = Api;
-      _shift = await api.GetShiftAsync(Id);
-      _automation = await api.GetShiftAutomationAsync(Id);
+      await LoadUnitsAsync();
+      await LoadShiftAsync();
+      await Live.SetAsync([ShiftLiveTopics.Shift(Id)]);
     }, toast: false);
   }
 
-  private async Task OpenEdit()
+  /// <summary>The shift and what hangs on it; drafts (the edit form, the handover note) are left alone.</summary>
+  private async Task LoadShiftAsync()
   {
-    if (_shift is null) return;
-    if (_sections.Count == 0) await RunAsync(async () => _sections = (await Api.ListSectionsAsync()).ToList());
-    if (_roles.Count == 0) await RunAsync(async () => _roles = (await Api.ListEffectiveRolesAsync(_shift.UnitId)).ToList());
-    _form = ShiftForm.From(_shift);
+    var api = Api;
+    try
+    {
+      var shift = await api.GetShiftAsync(Id);
+      if (_shift is null || _shift.UnitId != shift.UnitId)
+        _roles = (await api.ListEffectiveRolesAsync(shift.UnitId)).ToList();
+      _automation = await api.GetShiftAutomationAsync(Id);
+      Show(shift);
+      _gone = false;
+    }
+    catch (ShiftsApiException e) when (e.StatusCode == 404)
+    {
+      (_shift, _form, _handover, _gone) = (null, null, null, true);
+    }
   }
 
-  private Task PublishAsync() => ChangeAsync(api => api.PublishShiftAsync(Id), "Published: the rota's grants are written.");
+  private void Show(ShiftDto shift)
+  {
+    _shift = shift;
+    (_zone, _zoneName) = ClockOf(shift.UnitId);
+  }
 
-  private Task CheckInAsync() => ChangeAsync(api => api.CheckInAsync(Id), "Checked in: your shift rights start now.");
+  protected override Task OnShiftChangedAsync() => QuietlyAsync(LoadShiftAsync);
+
+  private string PlaceOf(ShiftDto shift) =>
+    shift.UnitId is { } id && Units.Find(id) is not null ? UnitName(id) : shift.Section;
+
+  private string At(DateTimeOffset? at) => at is { } known ? ZoneTime.Stamp(known, _zone) : "";
+
+  private string YesNo(bool value) => value ? L["Yes"] : L["No"];
+
+  private async Task OpenEditAsync()
+  {
+    if (_shift is null) return;
+    // A shift without a unit may move between the sections that have not moved; it keeps its own in any case.
+    if (_shift.UnitId is null && _sections.Count == 0)
+      await RunAsync(async () => _sections = (await Api.ListSectionsAsync())
+        .Where(s => s.MovedToUnitId is null || s.Id == _shift.SectionId).OrderBy(s => s.Name).ToList());
+    _form = ShiftForm.From(_shift, _zone);
+  }
+
+  private Task PublishAsync() => ChangeAsync(api => api.PublishShiftAsync(Id), L["Published: the rota's grants are written."]);
+
+  private Task CheckInAsync() => ChangeAsync(api => api.CheckInAsync(Id), L["Checked in: your shift rights start now."]);
 
   private Task CheckInMemberAsync(string userId) =>
     ChangeAsync(api => api.CheckInMemberAsync(Id, userId), L["{0} checked in.", Who(userId)]);
 
-  private async Task SaveHandoverAsync()
-  {
-    await ChangeAsync(api => api.WriteHandoverAsync(Id, new HandoverRequest { Note = _handover! }), "Handover note saved.");
-    if (Error is null) _handover = null;
-  }
-
-  private Task CheckOutAsync() => ChangeAsync(api => api.CheckOutShiftAsync(Id), "Shift checked out: its grants end now.");
+  private Task CheckOutAsync() => ChangeAsync(api => api.CheckOutShiftAsync(Id), L["Shift checked out: its grants end now."]);
 
   private Task CheckOutMemberAsync(string userId) =>
     ChangeAsync(api => api.CheckOutMemberAsync(Id, userId), L["{0} checked out.", Who(userId)]);
 
-  private async Task SaveAsync(ShiftForm form)
+  private async Task SaveHandoverAsync()
   {
-    await ChangeAsync(api => api.UpdateShiftAsync(Id, form.ToRequest()), "Shift saved.");
-    if (Error is null) _form = null;
+    var note = _handover!;
+    if (await ChangeAsync(api => api.WriteHandoverAsync(Id, new HandoverRequest { Note = note }), L["Handover note saved."]))
+      _handover = null;
   }
 
-  private async Task ChangeAsync(Func<ShiftsClient, Task<ShiftDto>> call, string done)
+  private async Task SaveAsync()
   {
-    await RunAsync(async () =>
+    var form = _form!;
+    if (await ChangeAsync(api => api.UpdateShiftAsync(Id, form.ToRequest()), L["Shift saved."]))
     {
-      _shift = await call(Api);
-      await MudTail.ToastAsync(L[done], "success");
-    });
+      _form = null;
+      await QuietlyAsync(LoadShiftAsync); // the unit's roles and the timings may have changed with it
+    }
   }
+
+  private Task<bool> ChangeAsync(Func<ShiftsClient, Task<ShiftDto>> call, string done) => RunAsync(async () =>
+  {
+    Show(await call(Api));
+    await MudTail.ToastAsync(done, "success");
+  });
 
   private async Task DeleteAsync()
   {
     var ok = await RunAsync(async () =>
     {
+      await Live.SetAsync([]);
       await Api.DeleteShiftAsync(Id);
       await MudTail.ToastAsync(L["Shift #{0} deleted.", Id], "success");
     });
     _confirmDelete = false;
     if (ok) Nav.NavigateTo("shifts");
+    else await Live.SetAsync([ShiftLiveTopics.Shift(Id)]);
   }
 }

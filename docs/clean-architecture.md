@@ -83,8 +83,8 @@ This is what the module is for, so it is worth knowing where each part lives:
   `IGrantStore.ReplaceSourceAsync("shift:{id}", ...)`. Nothing is written until the shift is published.
 - **ShiftChanges** is the shape of every change to a shift: load it, check who may do it, call the aggregate, save, and
   rewrite its grants. Publish, Update, CheckOut and CheckOutMember all go through it, so a published shift's grants
-  never lag behind its rota. Changing a section's categories or kind (`UpdateSectionHandler`) rewrites the grants of
-  its shifts that have not ended.
+  never lag behind its rota. Moving a section to Organization rewrites the grants of its shifts that have not ended
+  and drops the section's `section:{int}` scope from them.
 - The host evaluates each grant's window on every request, so rights start and stop on the clock without a job.
 
 ### Rules that come from the platform

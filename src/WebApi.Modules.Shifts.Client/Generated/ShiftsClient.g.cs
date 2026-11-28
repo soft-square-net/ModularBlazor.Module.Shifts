@@ -39,27 +39,11 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Adds a section. 409 once the sections moved to Organization (read-only: add Section units there).
-        /// </summary>
-        /// <returns>Created</returns>
-        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<SectionDto> AddSectionAsync(SectionRequest body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
-
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <summary>
         /// The sections that serve a category: the category's own sections first, then every department (they serve all categories).
         /// </summary>
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<SectionDto>> ListServingSectionsAsync(string category, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
-
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <summary>
-        /// Changing the categories or the kind rewrites the grants of the section's published shifts that have not ended. 409 once the sections moved to Organization (read-only).
-        /// </summary>
-        /// <returns>OK</returns>
-        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<SectionDto> UpdateSectionAsync(int id, SectionRequest body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
@@ -79,7 +63,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Creates a Section unit under the Department parentUnitId for each section (with the caller's token; a department section gets the tag 'department' and the category '*'), or links the units given in links. Maps the section, moves its shifts to the unit and publishes shifts.section-moved.v1. Idempotent; one result per section. The sections are read-only afterwards.
+        /// Creates a Section unit under the Department parentUnitId for each section (with the caller's token; a department section gets the tag 'department' and the category '*'), or links the units given in links. Maps the section, moves its shifts to the unit and publishes shifts.section-moved.v1. Idempotent; one result per section.
         /// </summary>
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
@@ -224,7 +208,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Plans a shift with its rota: role keys that hold for the unit (GET /roles/effective), at most one person in a lead role (exactly one to publish), and for a shift of a unit only members of the unit or a unit above it. Needs shifts.manage on the unit (tenant-wide for a shift with no unit). Its unit: unitId (a cached Organization unit), or the unit its section moved to; a section that has not moved yet may plan shifts without a unit. Nothing is granted until it is published.
+        /// Plans a shift with its rota: role keys that hold for the unit (GET /roles/effective), at most one person in a lead role (exactly one to publish), and for a shift of a unit only members of the unit or a unit above it. Needs shifts.manage on the unit (tenant-wide for a shift with no unit). Its unit: unitId (a cached Organization unit), or the unit its section moved to; a section that has not moved yet may plan shifts without a unit. sectionId is optional: with a unit only, the shift takes the section that moved to that unit, if any. Nothing is granted until it is published.
         /// </summary>
         /// <returns>Created</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
@@ -408,87 +392,6 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Adds a section. 409 once the sections moved to Organization (read-only: add Section units there).
-        /// </summary>
-        /// <returns>Created</returns>
-        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<SectionDto> AddSectionAsync(SectionRequest body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
-        {
-            if (body == null)
-                throw new System.ArgumentNullException("body");
-
-            var client_ = _httpClient;
-            var disposeClient_ = false;
-            try
-            {
-                using (var request_ = new System.Net.Http.HttpRequestMessage())
-                {
-                    var json_ = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(body, JsonSerializerSettings);
-                    var content_ = new System.Net.Http.ByteArrayContent(json_);
-                    content_.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("application/json");
-                    request_.Content = content_;
-                    request_.Method = new System.Net.Http.HttpMethod("POST");
-                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
-
-                    var urlBuilder_ = new System.Text.StringBuilder();
-                
-                    // Operation Path: "api/shifts/sections"
-                    urlBuilder_.Append("api/shifts/sections");
-
-                    PrepareRequest(client_, request_, urlBuilder_);
-
-                    var url_ = urlBuilder_.ToString();
-                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
-
-                    PrepareRequest(client_, request_, url_);
-
-                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                    var disposeResponse_ = true;
-                    try
-                    {
-                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
-                        foreach (var item_ in response_.Headers)
-                            headers_[item_.Key] = item_.Value;
-                        if (response_.Content != null && response_.Content.Headers != null)
-                        {
-                            foreach (var item_ in response_.Content.Headers)
-                                headers_[item_.Key] = item_.Value;
-                        }
-
-                        ProcessResponse(client_, response_);
-
-                        var status_ = (int)response_.StatusCode;
-                        if (status_ == 201)
-                        {
-                            var objectResponse_ = await ReadObjectResponseAsync<SectionDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
-                            if (objectResponse_.Object == null)
-                            {
-                                throw new ShiftsApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
-                            }
-                            return objectResponse_.Object;
-                        }
-                        else
-                        {
-                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
-                            throw new ShiftsApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
-                        }
-                    }
-                    finally
-                    {
-                        if (disposeResponse_)
-                            response_.Dispose();
-                    }
-                }
-            }
-            finally
-            {
-                if (disposeClient_)
-                    client_.Dispose();
-            }
-        }
-
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <summary>
         /// The sections that serve a category: the category's own sections first, then every department (they serve all categories).
         /// </summary>
         /// <returns>OK</returns>
@@ -541,91 +444,6 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
                         if (status_ == 200)
                         {
                             var objectResponse_ = await ReadObjectResponseAsync<System.Collections.Generic.IReadOnlyList<SectionDto>>(response_, headers_, cancellationToken).ConfigureAwait(false);
-                            if (objectResponse_.Object == null)
-                            {
-                                throw new ShiftsApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
-                            }
-                            return objectResponse_.Object;
-                        }
-                        else
-                        {
-                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
-                            throw new ShiftsApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
-                        }
-                    }
-                    finally
-                    {
-                        if (disposeResponse_)
-                            response_.Dispose();
-                    }
-                }
-            }
-            finally
-            {
-                if (disposeClient_)
-                    client_.Dispose();
-            }
-        }
-
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <summary>
-        /// Changing the categories or the kind rewrites the grants of the section's published shifts that have not ended. 409 once the sections moved to Organization (read-only).
-        /// </summary>
-        /// <returns>OK</returns>
-        /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<SectionDto> UpdateSectionAsync(int id, SectionRequest body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
-        {
-            if (id == null)
-                throw new System.ArgumentNullException("id");
-
-            if (body == null)
-                throw new System.ArgumentNullException("body");
-
-            var client_ = _httpClient;
-            var disposeClient_ = false;
-            try
-            {
-                using (var request_ = new System.Net.Http.HttpRequestMessage())
-                {
-                    var json_ = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(body, JsonSerializerSettings);
-                    var content_ = new System.Net.Http.ByteArrayContent(json_);
-                    content_.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("application/json");
-                    request_.Content = content_;
-                    request_.Method = new System.Net.Http.HttpMethod("PUT");
-                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
-
-                    var urlBuilder_ = new System.Text.StringBuilder();
-                
-                    // Operation Path: "api/shifts/sections/{id}"
-                    urlBuilder_.Append("api/shifts/sections/");
-                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
-
-                    PrepareRequest(client_, request_, urlBuilder_);
-
-                    var url_ = urlBuilder_.ToString();
-                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
-
-                    PrepareRequest(client_, request_, url_);
-
-                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                    var disposeResponse_ = true;
-                    try
-                    {
-                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
-                        foreach (var item_ in response_.Headers)
-                            headers_[item_.Key] = item_.Value;
-                        if (response_.Content != null && response_.Content.Headers != null)
-                        {
-                            foreach (var item_ in response_.Content.Headers)
-                                headers_[item_.Key] = item_.Value;
-                        }
-
-                        ProcessResponse(client_, response_);
-
-                        var status_ = (int)response_.StatusCode;
-                        if (status_ == 200)
-                        {
-                            var objectResponse_ = await ReadObjectResponseAsync<SectionDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ShiftsApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -807,7 +625,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Creates a Section unit under the Department parentUnitId for each section (with the caller's token; a department section gets the tag 'department' and the category '*'), or links the units given in links. Maps the section, moves its shifts to the unit and publishes shifts.section-moved.v1. Idempotent; one result per section. The sections are read-only afterwards.
+        /// Creates a Section unit under the Department parentUnitId for each section (with the caller's token; a department section gets the tag 'department' and the category '*'), or links the units given in links. Maps the section, moves its shifts to the unit and publishes shifts.section-moved.v1. Idempotent; one result per section.
         /// </summary>
         /// <returns>OK</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
@@ -2381,7 +2199,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Plans a shift with its rota: role keys that hold for the unit (GET /roles/effective), at most one person in a lead role (exactly one to publish), and for a shift of a unit only members of the unit or a unit above it. Needs shifts.manage on the unit (tenant-wide for a shift with no unit). Its unit: unitId (a cached Organization unit), or the unit its section moved to; a section that has not moved yet may plan shifts without a unit. Nothing is granted until it is published.
+        /// Plans a shift with its rota: role keys that hold for the unit (GET /roles/effective), at most one person in a lead role (exactly one to publish), and for a shift of a unit only members of the unit or a unit above it. Needs shifts.manage on the unit (tenant-wide for a shift with no unit). Its unit: unitId (a cached Organization unit), or the unit its section moved to; a section that has not moved yet may plan shifts without a unit. sectionId is optional: with a unit only, the shift takes the section that moved to that unit, if any. Nothing is granted until it is published.
         /// </summary>
         /// <returns>Created</returns>
         /// <exception cref="ShiftsApiException">A server side error occurred.</exception>
@@ -3711,6 +3529,9 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
         [System.Text.Json.Serialization.JsonPropertyName("checkoutGraceMinutes")]
         public int? CheckoutGraceMinutes { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("movedToUnitId")]
+        public System.Guid? MovedToUnitId { get; set; } = default!;
+
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
         [System.Text.Json.Serialization.JsonExtensionData]
@@ -3853,39 +3674,6 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
 
         [System.Runtime.Serialization.EnumMember(Value = @"Failed")]
         Failed = 3,
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class SectionRequest
-    {
-
-        [System.Text.Json.Serialization.JsonPropertyName("name")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string Name { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("categories")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public System.Collections.Generic.IReadOnlyList<string> Categories { get; set; } = new System.Collections.Generic.List<string>();
-
-        [System.Text.Json.Serialization.JsonPropertyName("autoAssignDelayMinutes")]
-        public int? AutoAssignDelayMinutes { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("checkoutGraceMinutes")]
-        public int? CheckoutGraceMinutes { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("kind")]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<SectionKind>))]
-        public SectionKind? Kind { get; set; } = default!;
-
-        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
-
-        [System.Text.Json.Serialization.JsonExtensionData]
-        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
-        {
-            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
-            set { _additionalProperties = value; }
-        }
 
     }
 
@@ -4130,7 +3918,7 @@ namespace soft.square.net.WebApi.Modules.Shifts.Client
     {
 
         [System.Text.Json.Serialization.JsonPropertyName("sectionId")]
-        public int SectionId { get; set; } = default!;
+        public int? SectionId { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("startsAt")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]

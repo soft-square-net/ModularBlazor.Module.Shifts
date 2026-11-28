@@ -1,3 +1,4 @@
+using Ardalis.Specification;
 using soft.square.net.Organization.Contracts;
 using soft.square.net.WebApi.Modules.Shifts.Core.SectionAggregate;
 using soft.square.net.WebApi.Modules.Shifts.Core.ShiftAggregate;
@@ -37,6 +38,46 @@ public class ShiftScopesBuild
         var section = Section.CreateDepartment("SEO").WithId(7);
 
         ShiftScopes.For(unit, unit.Categories, section).ShouldBe([$"unit:{UnitPaths.Id(Seo)}", $"section:{UnitPaths.Id(Seo)}", "section:7"]);
+    }
+
+    [Fact]
+    public void AMovedDepartmentDropsItsLegacySectionScope()
+    {
+        var unit = CachedUnit.From(State(SeoUnit()));
+        var section = Section.CreateDepartment("SEO").WithId(7);
+
+        ShiftScopes.For(unit, unit.Categories, section, sectionMoved: true).ShouldBe([$"unit:{UnitPaths.Id(Seo)}", $"section:{UnitPaths.Id(Seo)}"]);
+    }
+
+    [Fact]
+    public void AMovedCategorySectionKeepsItsCategoryScopes()
+    {
+        var unit = CachedUnit.From(State(SportUnit(1, "Sport", "football")));
+        var section = Section.Create("Sport", ["sport"], null, null).WithId(3);
+
+        ShiftScopes.For(unit, unit.Categories, section, sectionMoved: true)
+            .ShouldBe([$"unit:{UnitPaths.Id(Sport)}", "category:football", "category:sport"]);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task OnlyAShiftWhoseSectionMovedLosesTheLegacyScope(bool moved, bool keepsIt)
+    {
+        var fixture = new ShiftsFixture("admin-1");
+        await fixture.Units.ApplyAsync(State(SeoUnit()), Ct);
+        var department = Section.CreateDepartment("SEO").WithId(1);
+        if (moved)
+            fixture.Moved.FirstOrDefaultAsync(Arg.Any<ISpecification<SectionUnitMap>>(), Arg.Any<CancellationToken>())
+                .Returns(new SectionUnitMap(1, Seo, fixture.Clock.Now, "admin-1"));
+        var shift = Shift.Create(1, fixture.Clock.Now.AddHours(1), fixture.Clock.Now.AddHours(9), [ShiftBuilder.Lead(ShiftBuilder.Manager)], Seo);
+        shift.Publish();
+        ShiftBuilder.CheckEveryoneIn(shift, shift.StartsAt);
+
+        await fixture.ShiftGrants.WriteAsync(shift, department, Ct);
+
+        fixture.WrittenGrants(shift).Any(g => g.Scope == "section:1").ShouldBe(keepsIt);
+        fixture.WrittenGrants(shift).ShouldContain(g => g.Scope == $"section:{UnitPaths.Id(Seo)}");
     }
 
     [Fact]

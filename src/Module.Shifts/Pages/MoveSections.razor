@@ -1,0 +1,221 @@
+@page "/shifts/sections/move"
+@inherits ShiftsPageBase
+
+@*
+  Move sections to the Organization tree (POST /api/shifts/sections/move-to-organization; needs shifts.manage for the
+  whole tenant). A section gets a new Section unit under a Department, or is linked to a Section unit made by hand from
+  the JSON export (GET /api/shifts/sections/export). Idempotent, so it can be run again after a failure.
+*@
+
+<PageHeader Title="@L["Move sections"]" />
+
+<div class="mud-container sh-page">
+  <ShiftsNav Current="sections" />
+
+  <header class="sh-header">
+    <p class="sh-muted">@L["Each section becomes a Section unit of the Organization tree, and its shifts move with it. After the move, a shift's rights follow its unit."]</p>
+    <div class="sh-actions">
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="LoadAsync" disabled="@Busy">@L["Refresh"]</button>
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="ResyncAsync" disabled="@Busy">@L["Fetch units from Organization"]</button>
+    </div>
+  </header>
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 sh-error" role="alert" dir="auto">@Error</p>
+  }
+
+  @if (_report is not null)
+  {
+    <section class="mud-paper mud-elevation-2 sh-card" role="status">
+      <h2 class="mud-typography mud-typography-h6">@L["Result of the move"]</h2>
+      <div class="sh-scroll">
+        <table class="sh-table mud-typography-body2">
+          <thead><tr><th>@L["Section"]</th><th>@L["Status"]</th><th>@L["Unit"]</th><th>@L["Shifts moved"]</th><th>@L["Detail"]</th></tr></thead>
+          <tbody>
+            @foreach (var item in _report.Sections)
+            {
+              <tr @key="item.SectionId">
+                <td dir="auto">@item.Name</td>
+                <td><span class="sh-chip @(item.Status == SectionMoveStatus.Failed ? "sh-chip-warn" : "sh-chip-on")">@L[StatusText(item.Status)]</span></td>
+                <td>@(item.UnitId is null ? "" : UnitName(item.UnitId))</td>
+                <td>@item.ShiftsMoved</td>
+                <td dir="auto">@item.Detail</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (_sections is null)
+  {
+    @if (Error is null)
+    {
+      <p class="sh-muted">@L["Loading…"]</p>
+    }
+  }
+  else
+  {
+    <div class="sh-facts">
+      <span class="sh-chip">@L["Sections"] <strong>@_sections.Count</strong></span>
+      <span class="sh-chip sh-chip-on">@L["Moved"] <strong>@(_sections.Count - Unmoved.Count)</strong></span>
+      <span class="sh-chip @(Unmoved.Count > 0 ? "sh-chip-warn" : "")">@L["Not moved yet"] <strong>@Unmoved.Count</strong></span>
+    </div>
+
+    @if (Unmoved.Count == 0)
+    {
+      <p>@L["There is nothing left to move."]</p>
+    }
+    else
+    {
+      <form class="mud-paper mud-elevation-1 sh-card sh-form" @onsubmit="AskAsync" @onsubmit:preventDefault>
+        <h2 class="mud-typography mud-typography-h6">@L["Move"]</h2>
+        <p class="sh-muted">@L["Choose the Department that new units are created under. Or pick, for any section, a Section unit that already exists. Without the central Organization API, pick a unit for every remaining section at once."]</p>
+
+        <UnitPicker Tree="Units" Id="sh-department" Label="@L["Department for new units"].Value" Placeholder="@L["None: every section has a unit below"].Value"
+                    Selectable="u => u.TypeKey == UnitTree.DepartmentType" Value="@_department" ValueChanged="v => { _department = v; _confirming = false; }" />
+
+        <div class="sh-scroll">
+          <table class="sh-table mud-typography-body2">
+            <thead><tr><th>@L["Section"]</th><th>@L["Becomes"]</th></tr></thead>
+            <tbody>
+              @foreach (var section in Unmoved)
+              {
+                <tr @key="section.Id">
+                  <td dir="auto">@section.Name</td>
+                  <td>
+                    <UnitPicker Tree="Units" Id="@($"sh-link-{section.Id}")" Label="@L["Unit of {0}", section.Name].Value" Dense="true"
+                                Placeholder="@L["A new unit under the Department"].Value" Selectable="u => u.TypeKey == UnitTree.SectionType"
+                                Value="@LinkOf(section.Id)" ValueChanged="v => Link(section.Id, v)" />
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        @if (_confirming && Request is { } request)
+        {
+          <div class="sh-problem" role="alert">
+            <p>@L["Move {0} sections now: {1} to existing units, {2} to new ones. A moved section cannot be moved back.", Unmoved.Count, request.Links?.Count ?? 0, Unmoved.Count - (request.Links?.Count ?? 0)]</p>
+            <div class="sh-actions">
+              <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-small" disabled="@Busy" @onclick="() => MoveAsync(request)">@(Busy ? L["Moving…"] : L["Yes, move them"])</button>
+              <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-small" @onclick="() => _confirming = false">@L["Cancel"]</button>
+            </div>
+          </div>
+        }
+        else
+        {
+          @if (Request is null)
+          {
+            <p class="sh-muted">@L["Choose a Department, or a unit for every section."]</p>
+          }
+          <div class="sh-actions">
+            <button type="submit" class="mud-button-root mud-button-filled mud-button-primary" disabled="@(Busy || Request is null)">@L["Move sections"]</button>
+          </div>
+        }
+      </form>
+    }
+
+    @if (_sections.Count - Unmoved.Count > 0)
+    {
+      <p><button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" disabled="@Busy" @onclick="RepeatAsync">@L["Bring moved sections' shifts to their units again"]</button></p>
+    }
+
+    <section class="mud-paper mud-elevation-1 sh-card">
+      <h2 class="mud-typography mud-typography-h6">@L["Export"]</h2>
+      <p class="sh-muted">@L["The sections as JSON: their kinds, categories, shift counts and units. Use it to make the units by hand."]</p>
+      <div class="sh-actions">
+        <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-small" disabled="@Busy" @onclick="ExportAsync">@L["Export JSON"]</button>
+        @if (_export is not null)
+        {
+          <a class="mud-button-root mud-button-filled mud-button-primary mud-button-small" download="shifts-sections.json"
+             href="data:application/json;charset=utf-8,@Uri.EscapeDataString(_export)">@L["Download"]</a>
+        }
+      </div>
+      @if (_export is not null)
+      {
+        <textarea class="mud-input-slot sh-export" rows="12" readonly dir="ltr" aria-label="@L["Export"]">@_export</textarea>
+      }
+    </section>
+  }
+</div>
+
+@code {
+  private List<SectionDto>? _sections;
+  private readonly Dictionary<int, Guid> _links = [];
+  private string _department = "";
+  private bool _confirming;
+  private SectionMoveReport? _report;
+  private string? _export;
+
+  private List<SectionDto> Unmoved => _sections?.Where(s => s.MovedToUnitId is null).ToList() ?? [];
+
+  private MoveSectionsRequest? Request =>
+    SectionMove.Request([.. Unmoved.Select(s => s.Id)], _links, UnitPicker.Parse(_department));
+
+  private string LinkOf(int sectionId) => _links.TryGetValue(sectionId, out var unit) ? unit.ToString() : "";
+
+  private void Link(int sectionId, string value)
+  {
+    _confirming = false;
+    if (UnitPicker.Parse(value) is { } unit) _links[sectionId] = unit;
+    else _links.Remove(sectionId);
+  }
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (firstRender) await LoadAsync();
+  }
+
+  private Task LoadAsync() => RunAsync(LoadAllAsync, toast: false);
+
+  private async Task LoadAllAsync()
+  {
+    await LoadUnitsAsync();
+    _sections = (await Api.ListSectionsAsync()).OrderBy(s => s.Name).ToList();
+  }
+
+  private Task ResyncAsync() => RunAsync(async () =>
+  {
+    var result = await Api.ResyncUnitsAsync();
+    await MudTail.ToastAsync(L["Units fetched: {0}.", result.Listed], "success");
+    await LoadAllAsync();
+  });
+
+  private void AskAsync() => _confirming = true;
+
+  private Task MoveAsync(MoveSectionsRequest request) => RunAsync(async () =>
+  {
+    _report = await Api.MoveSectionsToOrganizationAsync(request);
+    (_confirming, _export) = (false, null);
+    _links.Clear();
+    var failed = _report.Sections.Count(s => s.Status == SectionMoveStatus.Failed);
+    await MudTail.ToastAsync(failed == 0 ? L["Sections moved."] : L["{0} sections were not moved: see the result.", failed],
+      failed == 0 ? "success" : "warning");
+    await LoadAllAsync();
+  });
+
+  /// <summary>With every section moved, the same call brings stray shifts to their section's unit; with some left it would need them too.</summary>
+  private Task RepeatAsync()
+  {
+    if (Unmoved.Count > 0)
+    {
+      Error = L["Move the remaining sections: that run brings the moved ones' shifts to their units too."];
+      return Task.CompletedTask;
+    }
+    return MoveAsync(new MoveSectionsRequest());
+  }
+
+  private Task ExportAsync() => RunAsync(async () => _export = SectionMove.ToJson(await Api.ExportSectionsAsync()));
+
+  private static string StatusText(SectionMoveStatus status) => status switch
+  {
+    SectionMoveStatus.Created => "Created",
+    SectionMoveStatus.Linked => "Linked",
+    SectionMoveStatus.AlreadyMapped => "Moved already",
+    _ => "Failed"
+  };
+}

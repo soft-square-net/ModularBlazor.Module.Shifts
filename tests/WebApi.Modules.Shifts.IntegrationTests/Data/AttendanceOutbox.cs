@@ -58,7 +58,8 @@ public sealed class AttendanceOutbox : IDisposable
             var thresholds = new ShiftThresholds(new EfRepository<UnitAttendance>(db), units, Options.Create(new ShiftOptions()));
             Shifts = new EfRepository<Shift>(db);
             var sections = new EfRepository<Section>(db);
-            Grants = new ShiftGrants(Substitute.For<IGrantStore>(), units, new ShiftRoles(new EfRepository<ShiftRoleDefinition>(db), units), thresholds);
+            Grants = new ShiftGrants(Substitute.For<IGrantStore>(), units, new ShiftRoles(new EfRepository<ShiftRoleDefinition>(db), units), thresholds,
+                new EfRepository<SectionUnitMap>(db));
             var events = new IntegrationEvents<ShiftsDbContext>(db, new IntegrationEventContext(),
                 new IntegrationEventsSettings<ShiftsDbContext>(new IntegrationEventsOptions { Source = "shifts" }));
             Notices = new ShiftNotices(events, Substitute.For<IShiftLive>(), units, thresholds, Caller);

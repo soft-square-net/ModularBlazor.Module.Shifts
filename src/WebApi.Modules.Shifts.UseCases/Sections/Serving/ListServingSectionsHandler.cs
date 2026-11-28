@@ -13,7 +13,7 @@ public sealed class ListServingSectionsHandler(IReadRepository<Section> sections
         return (await sections.ListAsync(new SectionsServingCategorySpec(categoryId), ct))
             .OrderBy(s => s.IsDepartment) // the category's own sections, then the departments
             .ThenBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)
-            .Select(SectionDto.From)
+            .Select(s => SectionDto.From(s))
             .ToArray();
     }
 }

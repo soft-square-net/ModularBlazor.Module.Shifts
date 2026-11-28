@@ -1,0 +1,292 @@
+@page "/shifts"
+@inherits ShiftsPageBase
+
+@*
+  The planner: one unit of the Organization tree (from the module's cache, GET /api/shifts/units) and one week of its
+  shifts on the unit's clock (GET /api/shifts/shifts?from&to), with the units below it unless that is switched off.
+  "Shifts without a unit" shows those planned on a section that has not moved. Live: the unit's topic, else each
+  shift's.
+*@
+
+<PageHeader Title="@L["Shifts Management"]" />
+
+<div class="mud-container sh-page">
+  <ShiftsNav Current="planner" />
+
+  <header class="sh-header">
+    <div class="sh-actions">
+      <UnitPicker Tree="Units" Value="@_choice" ValueChanged="ChooseAsync" Class="sh-inline" Dense="true"
+                  Placeholder="@L["Choose a unit"].Value" NoneText="@L["Shifts without a unit"].Value" />
+      @if (UnitId is not null)
+      {
+        <label class="sh-check">
+          <input type="checkbox" checked="@_below" @onchange="BelowChangedAsync" />
+          <span>@L["Include the units below"]</span>
+        </label>
+      }
+    </div>
+    <div class="sh-actions">
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="LoadAsync" disabled="@Busy">@L["Refresh"]</button>
+      <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="() => OpenCreate(null)" disabled="@(Busy || !CanPlan)">@L["New shift"]</button>
+    </div>
+  </header>
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 sh-error" role="alert" dir="auto">@Error</p>
+  }
+
+  @if (_unmoved.Count > 0)
+  {
+    <p class="sh-banner">
+      @L["Sections not yet moved to the Organization tree: {0}.", _unmoved.Count]
+      <a href="shifts/sections/move">@L["Move sections"]</a>
+    </p>
+  }
+
+  @if (_loaded && Units.Count == 0)
+  {
+    <section class="mud-paper mud-elevation-1 sh-card">
+      <p>@L["No Organization units are cached yet. With the Organization module installed, fetch them now."]</p>
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-small" @onclick="ResyncAsync" disabled="@Busy">@L["Fetch units from Organization"]</button>
+    </section>
+  }
+
+  @if (_choice == UnitPicker.NoneValue && _loaded && _unmoved.Count == 0)
+  {
+    <p class="sh-muted">@L["A shift without a unit needs a section that has not moved. Choose a unit to plan a new shift."]</p>
+  }
+
+  @if (_form is not null)
+  {
+    <ShiftEditor Form="_form" Title="@L["New shift"]" SubmitText="@L["Plan the shift"]" Sections="_unmoved" Roles="_roles"
+                 UnitName="@UnitName(_form.UnitId)" ZoneName="@_zoneName" Busy="Busy" Me="@Me" OnSave="CreateAsync" OnCancel="() => _form = null" />
+  }
+
+  @if (_choice.Length == 0)
+  {
+    <p class="sh-muted">@(_loaded ? L["Choose a unit to see its week."] : L["Loading…"])</p>
+  }
+  else
+  {
+    <div class="sh-week-bar">
+      <div class="sh-actions">
+        <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => ShowWeekAsync(_weekStart.AddDays(-7))" disabled="@Busy">@L["Previous week"]</button>
+        <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => ShowWeekAsync(CurrentWeek(_zone))" disabled="@Busy">@L["This week"]</button>
+        <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => ShowWeekAsync(_weekStart.AddDays(7))" disabled="@Busy">@L["Next week"]</button>
+      </div>
+      <h2 class="mud-typography mud-typography-subtitle1"><bdi dir="ltr">@ZoneTime.Date(_weekStart) – @ZoneTime.Date(_weekStart.AddDays(6))</bdi></h2>
+      <p class="sh-muted">@L["Times are in this clock: {0}.", _zoneName]</p>
+    </div>
+
+    <div class="sh-week">
+      @foreach (var day in Enumerable.Range(0, 7).Select(i => _weekStart.AddDays(i)))
+      {
+        var shifts = ShiftsOf(day);
+        <section class="mud-paper mud-elevation-1 sh-day @(day == _today ? "sh-today" : "")" @key="day">
+          <header>
+            <h3 class="mud-typography mud-typography-subtitle2">@CultureInfo.CurrentUICulture.DateTimeFormat.GetDayName(day.DayOfWeek)</h3>
+            <bdi dir="ltr" class="sh-muted">@ZoneTime.Date(day)</bdi>
+          </header>
+          @foreach (var shift in shifts)
+          {
+            var status = ShiftState.Status(shift, DateTimeOffset.UtcNow);
+            var (present, people) = ShiftState.Presence(shift);
+            <a class="sh-slot" href="shifts/@shift.Id" @key="shift.Id">
+              <bdi dir="ltr" class="sh-slot-time">@ZoneTime.Range(shift.StartsAt, shift.EndsAt, _zone)</bdi>
+              <span>@PlaceOf(shift)</span>
+              <span class="sh-chip @ShiftState.StatusClass(status)">@L[status]</span>
+              <span class="sh-muted">@L["{0} of {1} in", present, people]</span>
+            </a>
+          }
+          @if (shifts.Count == 0)
+          {
+            <p class="sh-muted">@L["No shifts."]</p>
+          }
+          @if (CanPlan)
+          {
+            <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" disabled="@Busy"
+                    aria-label="@L["New shift on {0}", ZoneTime.Date(day)]" @onclick="() => OpenCreate(day)">+ @L["Add"]</button>
+          }
+        </section>
+      }
+    </div>
+  }
+
+  @if (_overdue is { Count: > 0 })
+  {
+    <section class="mud-paper mud-elevation-1 sh-card">
+      <h2 class="mud-typography mud-typography-h6">@L["Overdue"]</h2>
+      <p class="sh-muted">@L["Published shifts past their end that nobody has checked out."]</p>
+      <ul class="sh-list">
+        @foreach (var shift in _overdue)
+        {
+          var clock = ClockOf(shift.UnitId);
+          <li @key="shift.Id">
+            <a href="shifts/@shift.Id">@L["Shift #{0}", shift.Id]</a>
+            · @PlaceOf(shift)
+            · <bdi dir="ltr">@ZoneTime.Stamp(shift.EndsAt, clock.Zone)</bdi> <span class="sh-muted">@clock.Name</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+</div>
+
+@code {
+  [SupplyParameterFromQuery(Name = "unit")] public string? Unit { get; set; }
+
+  private string _choice = "";
+  private bool _below = true;
+  private bool _loaded;
+  private int _loads;
+  private DateOnly _weekStart;
+  private DateOnly _today;
+  private TimeZoneInfo _zone = TimeZoneInfo.Local;
+  private string _zoneName = "";
+  private List<ShiftDto> _shifts = [];
+  private List<ShiftDto>? _overdue;
+  private List<SectionDto> _unmoved = [];
+  private List<RoleDefinitionDto> _roles = [];
+  private ShiftForm? _form;
+  private readonly HashSet<Guid> _deafUnits = [];
+
+  private Guid? UnitId => UnitPicker.Parse(_choice);
+
+  private bool CanPlan => _loaded && (UnitId is not null || (_choice == UnitPicker.NoneValue && _unmoved.Count > 0));
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (firstRender) await LoadAsync();
+  }
+
+  private async Task LoadAsync()
+  {
+    await RunAsync(async () =>
+    {
+      await LoadUnitsAsync();
+      _unmoved = (await Api.ListSectionsAsync()).Where(s => s.MovedToUnitId is null).OrderBy(s => s.Name).ToList();
+      if (!_loaded)
+      {
+        // The address's unit; a tenant without units starts with the shifts that have none.
+        _choice = Unit == UnitPicker.NoneValue || Units.Find(UnitPicker.Parse(Unit)) is not null ? Unit!
+          : Units.Count == 0 ? UnitPicker.NoneValue
+          : Units.Roots.Count == 1 ? Units.Roots[0].Unit.Id.ToString() : "";
+        _weekStart = CurrentWeek(ClockOf(UnitId).Zone);
+      }
+      await LoadWeekAsync();
+      _loaded = true;
+    }, toast: false);
+  }
+
+  private async Task LoadWeekAsync()
+  {
+    var load = ++_loads;
+    var unitId = UnitId;
+    var (zone, zoneName) = ClockOf(unitId);
+    (_zone, _zoneName) = (zone, zoneName);
+    _today = ZoneTime.DateOf(DateTimeOffset.UtcNow, zone);
+    if (_choice.Length == 0)
+    {
+      _shifts = [];
+      await Live.SetAsync([]);
+      return;
+    }
+
+    var (from, to) = ZoneTime.Week(_weekStart, zone);
+    var api = Api;
+    var all = await api.ListShiftsAsync(null, from, to);
+    var roles = (await api.ListEffectiveRolesAsync(unitId)).ToList();
+    var overdue = await OverdueAsync(api);
+    if (load != _loads) return; // a later choice is loading
+
+    var wanted = unitId is null ? null : _below ? Units.SelfAndBelow(unitId.Value) : new HashSet<Guid> { unitId.Value };
+    _shifts = all.Where(s => wanted is null ? s.UnitId is null : s.UnitId is { } u && wanted.Contains(u))
+      .OrderBy(s => s.StartsAt).ThenBy(s => s.Id).ToList();
+    _roles = roles;
+    _overdue = overdue;
+    await ListenAsync(unitId);
+  }
+
+  /// <summary>The overdue list is for shift managers: without the right, the card stays away.</summary>
+  private static async Task<List<ShiftDto>?> OverdueAsync(ShiftsClient api)
+  {
+    try { return (await api.ListOverdueAsync()).OrderBy(s => s.EndsAt).ToList(); }
+    catch (ShiftsApiException e) when (e.StatusCode == 403) { return null; }
+  }
+
+  private async Task ListenAsync(Guid? unitId)
+  {
+    if (unitId is { } id && !_deafUnits.Contains(id))
+    {
+      if ((await Live.SetAsync([ShiftLiveTopics.Unit(id)])).Count == 0) return;
+      _deafUnits.Add(id); // the unit's topic needs the Organization module's permission
+    }
+    await Live.SetAsync(_shifts.Select(s => ShiftLiveTopics.Shift(s.Id)));
+  }
+
+  protected override Task OnShiftChangedAsync() => QuietlyAsync(LoadWeekAsync);
+
+  private static DateOnly CurrentWeek(TimeZoneInfo zone) =>
+    ZoneTime.WeekStart(ZoneTime.DateOf(DateTimeOffset.UtcNow, zone), CultureInfo.CurrentUICulture.DateTimeFormat.FirstDayOfWeek);
+
+  /// <summary>A shift stands on the day it starts; one that started before the week stands on its first day.</summary>
+  private List<ShiftDto> ShiftsOf(DateOnly day) => _shifts.Where(s =>
+  {
+    var start = ZoneTime.DateOf(s.StartsAt, _zone);
+    return (start < _weekStart ? _weekStart : start) == day;
+  }).ToList();
+
+  private string PlaceOf(ShiftDto shift) =>
+    shift.UnitId is { } id && Units.Find(id) is not null ? UnitName(id) : shift.Section;
+
+  private async Task ChooseAsync(string choice)
+  {
+    _choice = choice;
+    _form = null;
+    _shifts = [];
+    Nav.NavigateTo(Nav.GetUriWithQueryParameter("unit", choice.Length == 0 ? null : choice), replace: true);
+    await RunAsync(LoadWeekAsync, toast: false);
+  }
+
+  private async Task BelowChangedAsync(ChangeEventArgs e)
+  {
+    _below = e.Value is true;
+    await RunAsync(LoadWeekAsync, toast: false);
+  }
+
+  private async Task ShowWeekAsync(DateOnly weekStart)
+  {
+    _weekStart = weekStart;
+    await RunAsync(LoadWeekAsync, toast: false);
+  }
+
+  private async Task ResyncAsync()
+  {
+    var done = await RunAsync(async () =>
+    {
+      var result = await Api.ResyncUnitsAsync();
+      await MudTail.ToastAsync(L["Units fetched: {0}.", result.Listed], "success");
+    });
+    if (!done) return;
+    _loaded = false;
+    Unit = null;
+    await LoadAsync();
+  }
+
+  private void OpenCreate(DateOnly? day) =>
+    _form = ShiftForm.New(_zone, Me, UnitId, UnitId is null ? _unmoved : null, day);
+
+  private async Task CreateAsync()
+  {
+    var form = _form!;
+    ShiftDto? created = null;
+    await RunAsync(async () =>
+    {
+      created = await Api.AddShiftAsync(form.ToRequest());
+      await MudTail.ToastAsync(L["Shift #{0} planned. Publish it from its page.", created.Id], "success");
+      _form = null;
+    });
+    if (created is not null) Nav.NavigateTo($"shifts/{created.Id}");
+  }
+}

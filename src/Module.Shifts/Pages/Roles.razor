@@ -1,0 +1,244 @@
+@page "/shifts/roles"
+@inherits ShiftsPageBase
+
+@*
+  Role definitions (GET/POST/PUT/DELETE /api/shifts/roles): the tenant-wide ones and the units' overrides. The API
+  refuses two changes with 409 while shifts that have not ended, or templates, use a role: removing it when no other
+  definition of the same key and lead flag takes over (an heir), and changing its lead flag. The page says what can be
+  done instead.
+*@
+
+<PageHeader Title="@L["Role definitions"]" />
+
+<div class="mud-container sh-page">
+  <ShiftsNav Current="roles" />
+
+  <header class="sh-header">
+    <p class="sh-muted">@L["A role gives the member who holds it its permissions while their shift runs. A unit's role of the same key overrides the one above it, for that unit and the units below it."]</p>
+    <div class="sh-actions">
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="LoadAsync" disabled="@Busy">@L["Refresh"]</button>
+      <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="() => Open(RoleForm.New())" disabled="@Busy">@L["New role"]</button>
+    </div>
+  </header>
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 sh-error" role="alert" dir="auto">@Error</p>
+  }
+
+  @if (_heirNeeded is { } kept)
+  {
+    <section class="mud-paper mud-elevation-2 sh-card sh-problem" role="alert">
+      <h2 class="mud-typography mud-typography-subtitle1">@L["The role {0} cannot be removed yet: an heir is needed.", kept.Key]</h2>
+      @if (kept.UnitId is null)
+      {
+        <p>@L["Shifts that have not ended or templates use it. Nothing stands above a tenant-wide role to take over: take it off those shifts and templates, then remove it."]</p>
+      }
+      else
+      {
+        <p>@L["Shifts that have not ended or templates use it, and no other definition would take over for them. Either:"]</p>
+        <ul class="sh-list">
+          <li>@(kept.IsLead
+              ? L["add a lead role with the key {0} on a unit above, or for the whole tenant, then remove this one;", kept.Key]
+              : L["add a role with the key {0} that is not a lead, on a unit above or for the whole tenant, then remove this one;", kept.Key])</li>
+          <li>@L["or take the role off those shifts and templates, then remove it."]</li>
+        </ul>
+      }
+      <div class="sh-actions">
+        @if (kept.UnitId is not null && !_roles.Any(r => r.UnitId is null && r.Key == kept.Key))
+        {
+          <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-small" @onclick="() => Open(RoleForm.HeirOf(kept))">@L["Add a tenant-wide heir"]</button>
+        }
+        <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-small" @onclick="() => _heirNeeded = null">@L["Close"]</button>
+      </div>
+    </section>
+  }
+
+  @if (_form is not null)
+  {
+    <form class="mud-paper mud-elevation-2 sh-card sh-form" @onsubmit="SaveAsync" @onsubmit:preventDefault @key="_form">
+      <h2 class="mud-typography mud-typography-h6">@(_form.Id is null ? L["New role"] : L["Edit role {0}", _form.Key])</h2>
+
+      @if (_leadRefused)
+      {
+        <div class="sh-problem" role="alert">
+          <p>@L["The lead flag cannot change while shifts that have not ended or templates use this role."]</p>
+          <div class="sh-actions">
+            <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-small" @onclick="SaveKeepingLeadAsync" disabled="@Busy">@L["Keep the lead flag and save the rest"]</button>
+            <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-small" @onclick="() => Open(_form!.AsNew())">@L["Add a new role instead"]</button>
+          </div>
+        </div>
+      }
+
+      <div class="sh-grid">
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="sh-r-key">@L["Key"]</label>
+          <div class="mud-input-wrapper"><input id="sh-r-key" class="mud-input-slot" dir="ltr" maxlength="64" pattern="[a-z][a-z0-9\-]*" required disabled="@(_form.Id is not null)" @bind="_form.Key" /></div>
+          <div class="mud-input-helper-text">@L["Lowercase letters, digits and dashes. It cannot change later."]</div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="sh-r-en">@L["English name"]</label>
+          <div class="mud-input-wrapper"><input id="sh-r-en" class="mud-input-slot" dir="ltr" maxlength="200" required @bind="_form.NameEn" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="sh-r-ar">@L["Arabic name"]</label>
+          <div class="mud-input-wrapper"><input id="sh-r-ar" class="mud-input-slot" dir="rtl" lang="ar" maxlength="200" @bind="_form.NameAr" /></div>
+        </div>
+        @if (_form.Id is null)
+        {
+          <UnitPicker Tree="Units" Id="sh-r-unit" Label="@L["Applies to"].Value" Placeholder="@L["The whole tenant"].Value"
+                      Value="@_form.UnitId" ValueChanged="v => _form.UnitId = v" />
+        }
+        else
+        {
+          <p>@L["Applies to"]: <strong>@ScopeOf(UnitPicker.Parse(_form.UnitId))</strong></p>
+        }
+      </div>
+
+      <label class="sh-check">
+        <input type="checkbox" @bind="_form.IsLead" />
+        <span>@L["A lead role: a published shift has exactly one lead, who checks others in and writes the handover."]</span>
+      </label>
+
+      <PermissionPicker Selected="_form.Permissions" />
+
+      <div class="sh-actions">
+        <button type="submit" class="mud-button-root mud-button-filled mud-button-primary" disabled="@Busy">@L["Save"]</button>
+        <button type="button" class="mud-button-root mud-button-text mud-button-surface" @onclick="() => _form = null">@L["Cancel"]</button>
+      </div>
+    </form>
+  }
+
+  @if (_loaded)
+  {
+    <section class="mud-paper mud-elevation-1 sh-card">
+      <div class="sh-scroll">
+        <table class="sh-table mud-typography-body2">
+          <thead><tr><th>@L["Role"]</th><th>@L["Key"]</th><th>@L["Applies to"]</th><th>@L["Permissions"]</th><th><span class="sh-sr">@L["Actions"]</span></th></tr></thead>
+          <tbody>
+            @foreach (var role in _roles)
+            {
+              <tr @key="role.Id">
+                <td>@RoleChoices.NameOf(role, Arabic) @if (role.IsLead) {<span class="sh-chip sh-chip-on">@L["lead"]</span>}</td>
+                <td><bdi dir="ltr">@role.Key</bdi></td>
+                <td>@ScopeOf(role.UnitId)</td>
+                <td>
+                  @foreach (var permission in role.Permissions)
+                  {
+                    <div><bdi dir="ltr">@permission</bdi></div>
+                  }
+                  @if (role.Permissions.Count == 0)
+                  {
+                    <span class="sh-muted">@L["None"]</span>
+                  }
+                </td>
+                <td>
+                  <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" disabled="@Busy" @onclick="() => Open(RoleForm.From(role))">@L["Edit"]</button>
+                  @if (_deleting == role.Id)
+                  {
+                    <button type="button" class="mud-button-root mud-button-filled mud-button-error mud-button-small" disabled="@Busy" @onclick="() => DeleteAsync(role)">@L["Delete for good"]</button>
+                    <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-small" @onclick="() => _deleting = null">@L["Keep it"]</button>
+                  }
+                  else
+                  {
+                    <button type="button" class="mud-button-root mud-button-text mud-button-surface sh-danger mud-button-small" disabled="@Busy" @onclick="() => _deleting = role.Id">@L["Delete"]</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (_roles.Count == 0)
+      {
+        <p class="sh-muted">@L["No role definitions yet."]</p>
+      }
+    </section>
+  }
+  else if (Error is null)
+  {
+    <p class="sh-muted">@L["Loading…"]</p>
+  }
+</div>
+
+@code {
+  private List<RoleDefinitionDto> _roles = [];
+  private RoleForm? _form;
+  private RoleDefinitionDto? _heirNeeded;
+  private bool _leadRefused;
+  private bool _loaded;
+  private int? _deleting;
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (firstRender) await LoadAsync();
+  }
+
+  private Task LoadAsync() => RunAsync(async () =>
+  {
+    await LoadUnitsAsync();
+    await LoadRolesAsync();
+    _loaded = true;
+  }, toast: false);
+
+  private async Task LoadRolesAsync() =>
+    _roles = (await Api.ListRolesAsync()).OrderBy(r => r.Key, StringComparer.Ordinal).ThenBy(r => r.UnitId is not null).ToList();
+
+  private string ScopeOf(Guid? unitId) => unitId is null ? L["The whole tenant"] : UnitName(unitId);
+
+  private void Open(RoleForm form)
+  {
+    (_form, _leadRefused, _heirNeeded, _deleting) = (form, false, null, null);
+    Error = null;
+  }
+
+  private async Task SaveAsync()
+  {
+    var form = _form!;
+    _leadRefused = false;
+    await RunAsync(async () =>
+    {
+      try
+      {
+        var saved = form.Id is { } id
+          ? await Api.UpdateRoleAsync(id, form.ToUpdate())
+          : await Api.AddRoleAsync(form.ToRequest());
+        await MudTail.ToastAsync(L["Role {0} saved.", saved.Key], "success");
+        _form = null;
+        await LoadRolesAsync();
+      }
+      catch (ShiftsApiException e) when (RoleConflicts.IsLeadRefusal(e.StatusCode, form.Id, form.IsLead, form.WasLead))
+      {
+        _leadRefused = true;
+        throw;
+      }
+    });
+  }
+
+  private async Task SaveKeepingLeadAsync()
+  {
+    _form!.IsLead = _form.WasLead;
+    await SaveAsync();
+  }
+
+  private async Task DeleteAsync(RoleDefinitionDto role)
+  {
+    _heirNeeded = null;
+    await RunAsync(async () =>
+    {
+      try
+      {
+        await Api.DeleteRoleAsync(role.Id);
+      }
+      catch (ShiftsApiException e) when (e.StatusCode == 409)
+      {
+        _heirNeeded = role;
+        throw;
+      }
+      await MudTail.ToastAsync(L["Role {0} removed.", role.Key], "success");
+      if (_form?.Id == role.Id) _form = null;
+      await LoadRolesAsync();
+    });
+    _deleting = null;
+  }
+}

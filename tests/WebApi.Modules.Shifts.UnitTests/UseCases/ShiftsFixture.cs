@@ -75,7 +75,8 @@ public sealed class ShiftsFixture
         UnitMembers = new UnitMembers(Organization, NullLogger<UnitMembers>.Instance);
         Rota = new ShiftRota(Roles, Units, UnitMembers);
         Thresholds = new ShiftThresholds(AttendanceStore, Units, Microsoft.Extensions.Options.Options.Create(Options));
-        ShiftGrants = new ShiftGrants(Grants, Units, Roles, Thresholds);
+        ShiftGrants = new ShiftGrants(Grants, Units, Roles, Thresholds, Moved);
+        Moved.ListAsync(Arg.Any<ISpecification<SectionUnitMap>>(), Arg.Any<CancellationToken>()).Returns([]);
         Details = new ShiftDetails(ShiftReader, SectionReader, Units, Caller, Thresholds);
         Notices = new ShiftNotices(Events, Live, Units, Thresholds, Caller);
         Changes = new ShiftChanges(Shifts, SectionReader, ShiftGrants, Details, Notices);
